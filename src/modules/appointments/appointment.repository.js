@@ -76,6 +76,19 @@ const appointmentRescheduleSelect = {
   },
 };
 
+const duplicateAppointmentSelect = {
+  id: true,
+  clientId: true,
+  professionalId: true,
+  serviceId: true,
+  startAt: true,
+  endAt: true,
+  status: true,
+  client: { select: { id: true, name: true } },
+  professional: { select: { id: true, name: true } },
+  service: { select: { id: true, name: true } },
+};
+
 function getDb(prismaOrTx) {
   return prismaOrTx ?? prisma;
 }
@@ -250,6 +263,23 @@ export function findConflictingAppointment(
   return getDb(prismaOrTx).appointment.findFirst({
     where,
     select: { id: true, startAt: true, endAt: true, status: true },
+  });
+}
+
+export function findActiveClientServiceAppointment(clientId, serviceId) {
+  return prisma.appointment.findFirst({
+    where: {
+      clientId,
+      serviceId,
+      deletedAt: null,
+      status: { in: CONFLICT_STATUSES },
+      OR: [
+        { startAt: { gte: new Date() } },
+        { status: "IN_ATTENDANCE" },
+      ],
+    },
+    orderBy: { startAt: "asc" },
+    select: duplicateAppointmentSelect,
   });
 }
 

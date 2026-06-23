@@ -3,13 +3,14 @@ import { Prisma } from "@prisma/client";
 import { env } from "../config/env.js";
 import { AppError } from "../errors/AppError.js";
 
-function buildErrorBody(message, code, details) {
+function buildErrorBody(message, code, details, meta = null) {
   return {
     success: false,
     message,
     error: {
       code,
       ...(details?.length > 0 && { details }),
+      ...(meta ?? {}),
     },
   };
 }
@@ -23,7 +24,7 @@ export function errorHandler(err, req, res, next) {
   if (err instanceof AppError) {
     return res
       .status(err.statusCode)
-      .json(buildErrorBody(err.message, err.code, err.details));
+      .json(buildErrorBody(err.message, err.code, err.details, err.meta));
   }
 
   if (err instanceof Prisma.PrismaClientKnownRequestError) {

@@ -72,6 +72,10 @@ export const env = {
   PORT: port,
   DATABASE_URL: getEnvValue("DATABASE_URL"),
   CLIENT_URL: getEnvValue("CLIENT_URL"),
+  ALLOWED_ORIGINS: (getEnvValue("ALLOWED_ORIGINS") || getEnvValue("CLIENT_URL"))
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
   EMAIL_PROVIDER: getEnvValue("EMAIL_PROVIDER") || "resend",
   EMAIL_ENABLED: getBooleanEnvValue("EMAIL_ENABLED", false),
   RESEND_API_KEY: getEnvValue("RESEND_API_KEY"),

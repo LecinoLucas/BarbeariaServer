@@ -8,6 +8,7 @@ import { ConflictError } from "../../errors/ConflictError.js";
 import {
   assertAppointmentSlotAvailability,
   buildCalendarDays,
+  createAppointment,
   generateSlots,
   groupAppointmentsByBusinessDay,
   rescheduleAppointment,
@@ -722,4 +723,142 @@ test("rescheduleAppointment faz retry em conflito serializável de transação",
 
   assert.equal(attempts, 2);
   assert.equal(result.startAt.toISOString(), "2026-06-23T13:00:00.000Z");
+});
+
+// ── createAppointment — duplicate detection ──────────────────────────────────
+
+function buildDuplicateHarness(t, options = {}) {
+  const existing = options.existingAppointment ?? {
+    id: "apt-existing",
+    clientId: "client-1",
+    serviceId: "svc-1",
+    professionalId: "pro-1",
+    startAt: new Date("2026-06-25T13:00:00.000Z"), // 10:00 America/Sao_Paulo
+    endAt: new Date("2026-06-25T14:00:00.000Z"),
+    status: "SCHEDULED",
+    client: { id: "client-1", name: "João" },
+    professional: { id: "pro-1", name: "Alpha" },
+    service: { id: "svc-1", name: "Corte" },
+  };
+
+  const saved = {
+    clientFindFirst: prisma.client.findFirst,
+    professionalFindFirst: prisma.professional.findFirst,
+    serviceFindFirst: prisma.service.findFirst,
+    appointmentFindFirst: prisma.appointment.findFirst,
+    scheduleBlockFindFirst: prisma.scheduleBlock?.findFirst,
+  };
+
+  t.after(() => {
+    prisma.client.findFirst = saved.clientFindFirst;
+    prisma.professional.findFirst = saved.professionalFindFirst;
+    prisma.service.findFirst = saved.serviceFindFirst;
+    prisma.appointment.findFirst = saved.appointmentFindFirst;
+    if (saved.scheduleBlockFindFirst !== undefined) {
+      prisma.scheduleBlock.findFirst = saved.scheduleBlockFindFirst;
+    }
+  });
+
+  prisma.client.findFirst = async () => ({
+    id: "client-1",
+    name: "João",
+    status: "ACTIVE",
+    userId: "u-client-1",
+  });
+  prisma.professional.findFirst = async () => ({
+    id: "pro-1",
+    name: "Alpha",
+    status: "ACTIVE",
+    appointmentIntervalMinutes: 30,
+    userId: "u-pro-1",
+  });
+  prisma.service.findFirst = async () => ({
+    id: "svc-1",
+    name: "Corte",
+    status: "ACTIVE",
+    durationMinutes: 60,
+    price: 5000,
+  });
+  prisma.appointment.findFirst = async () =>
+    options.appointmentFindFirst === undefined ? existing : options.appointmentFindFirst;
+
+  return { existing };
+}
+
+const ADMIN_ACTOR = buildActor();
+const BASE_PAYLOAD = {
+  clientId: "client-1",
+  professionalId: "pro-1",
+  serviceId: "svc-1",
+  startAt: new Date("2026-06-26T13:00:00.000Z"),
+};
+
+test("createAppointment lança ConflictError quando cliente já tem agendamento ativo para o mesmo serviço", async (t) => {
+  buildDuplicateHarness(t);
+
+  await assert.rejects(
+    () => createAppointment(BASE_PAYLOAD, ADMIN_ACTOR),
+    (error) => {
+      assert.equal(error instanceof ConflictError, true);
+      assert.equal(error.code, "APPOINTMENT_DUPLICATE_CLIENT_SERVICE");
+      return true;
+    },
+  );
+});
+
+test("createAppointment: existingAppointment na resposta 409 mantém somente o contrato mínimo", async (t) => {
+  buildDuplicateHarness(t);
+
+  await assert.rejects(
+    () => createAppointment(BASE_PAYLOAD, ADMIN_ACTOR),
+    (error) => {
+      const ea = error.meta?.existingAppointment;
+      assert.deepEqual(Object.keys(ea).sort(), [
+        "client",
+        "clientId",
+        "endAt",
+        "id",
+        "professional",
+        "professionalId",
+        "service",
+        "serviceId",
+        "startAt",
+        "status",
+      ]);
+      assert.equal(ea.startAt instanceof Date, true);
+      assert.equal(ea.endAt instanceof Date, true);
+      return true;
+    },
+  );
+});
+
+test("createAppointment: existingAppointment na resposta 409 inclui client, professional e service", async (t) => {
+  buildDuplicateHarness(t);
+
+  await assert.rejects(
+    () => createAppointment(BASE_PAYLOAD, ADMIN_ACTOR),
+    (error) => {
+      const ea = error.meta?.existingAppointment;
+      assert.equal(ea.client.name, "João");
+      assert.equal(ea.professional.name, "Alpha");
+      assert.equal(ea.service.name, "Corte");
+      assert.equal(ea.status, "SCHEDULED");
+      return true;
+    },
+  );
+});
+
+test("createAppointment: confirmDuplicate=true bypassa a verificação e prossegue para os próximos passos", async (t) => {
+  buildDuplicateHarness(t);
+
+  const sentinel = Object.assign(new Error("SENTINEL_SCHEDULE_BLOCK"), { isSentinel: true });
+  prisma.scheduleBlock.findFirst = async () => { throw sentinel; };
+
+  await assert.rejects(
+    () => createAppointment({ ...BASE_PAYLOAD, confirmDuplicate: true }, ADMIN_ACTOR),
+    (error) => {
+      assert.equal(error.isSentinel, true, "deve chegar ao passo de scheduleBlock, não ao ConflictError de duplicidade");
+      return true;
+    },
+  );
 });

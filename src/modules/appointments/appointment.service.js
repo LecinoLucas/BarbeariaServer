@@ -25,6 +25,7 @@ import {
   findById,
   findAppointmentForReschedule,
   findClientById,
+  findActiveClientServiceAppointment,
   findClientByUserId,
   findConflictingAppointment,
   findConflictingScheduleBlock,
@@ -443,6 +444,23 @@ export async function createAppointment(payload, actor) {
 
   const service = await validateServiceActive(payload.serviceId);
 
+  if (!payload.confirmDuplicate) {
+    const existingAppointment = await findActiveClientServiceAppointment(
+      payload.clientId,
+      payload.serviceId,
+    );
+
+    if (existingAppointment) {
+      throw new ConflictError(
+        "Este cliente já possui um agendamento ativo para este serviço.",
+        "APPOINTMENT_DUPLICATE_CLIENT_SERVICE",
+        {
+          existingAppointment,
+        },
+      );
+    }
+  }
+
   const startAt = payload.startAt;
   const endAt = calcEndAt(startAt, service.durationMinutes);
 
@@ -511,6 +529,7 @@ export async function getAppointmentsMonthSummary(query, actor) {
     clientId: filters.clientId,
     endDate,
     professionalId: filters.professionalId,
+    search: filters.search,
     startDate,
     status: filters.status,
   });

@@ -65,6 +65,7 @@ export const createAppointmentSchema = z.object({
   startAt: startAtSchema,
   notes: notesSchema,
   status: statusSchema.default(APPOINTMENT_STATUS.SCHEDULED),
+  confirmDuplicate: z.boolean().optional().default(false),
 });
 
 export const updateAppointmentSchema = z.object({

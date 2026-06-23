@@ -6,9 +6,11 @@ import {
   findAppointmentForReschedule,
   findProfessionalAvailabilityContext,
   findConflictingAppointment,
+  findActiveClientServiceAppointment,
   getSystemSettings,
   listByDay,
   listByWeek,
+  listMonthSummaryRows,
   updateAppointmentSchedule,
 } from "./appointment.repository.js";
 
@@ -141,6 +143,28 @@ test("findConflictingAppointment usa professionalId + janela de tempo + status b
   assert.deepEqual(Object.keys(calls[0].select).sort(), ["endAt", "id", "startAt", "status"]);
 });
 
+test("findActiveClientServiceAppointment filtra cliente, serviço e status ativos com select mínimo", async (t) => {
+  const originalFindFirst = prisma.appointment.findFirst;
+  const calls = [];
+  t.after(() => { prisma.appointment.findFirst = originalFindFirst; });
+  prisma.appointment.findFirst = async (args) => { calls.push(args); return null; };
+
+  await findActiveClientServiceAppointment("client-1", "service-1");
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].where.clientId, "client-1");
+  assert.equal(calls[0].where.serviceId, "service-1");
+  assert.deepEqual(calls[0].where.status.in, ["SCHEDULED", "CONFIRMED", "IN_ATTENDANCE"]);
+  assert.equal(calls[0].where.deletedAt, null);
+  assert.equal(calls[0].where.OR[0].startAt.gte instanceof Date, true);
+  assert.deepEqual(calls[0].where.OR[1], { status: "IN_ATTENDANCE" });
+  assert.equal(calls[0].orderBy.startAt, "asc");
+  assert.deepEqual(Object.keys(calls[0].select).sort(), ["client", "clientId", "endAt", "id", "professional", "professionalId", "service", "serviceId", "startAt", "status"]);
+  assert.deepEqual(Object.keys(calls[0].select.client.select).sort(), ["id", "name"]);
+  assert.deepEqual(Object.keys(calls[0].select.professional.select).sort(), ["id", "name"]);
+  assert.deepEqual(Object.keys(calls[0].select.service.select).sort(), ["id", "name"]);
+});
+
 test("métodos novos aceitam tx explícito sem tocar no prisma global", async () => {
   const calls = [];
   const tx = {
@@ -190,4 +214,84 @@ test("métodos novos aceitam tx explícito sem tocar no prisma global", async ()
       "appointment.update",
     ],
   );
+});
+
+test("listMonthSummaryRows aplica filtro de busca quando search está presente", async (t) => {
+  const originalFindMany = prisma.appointment.findMany;
+  const calls = [];
+
+  t.after(() => {
+    prisma.appointment.findMany = originalFindMany;
+  });
+
+  prisma.appointment.findMany = async (args) => {
+    calls.push(args);
+    return [];
+  };
+
+  await listMonthSummaryRows({ startDate: "2026-06-01", endDate: "2026-06-30", search: "João" });
+
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].where.OR, "deve incluir cláusula OR para busca de texto");
+  assert.ok(
+    calls[0].where.OR.some((cond) => cond.client?.name?.contains === "João"),
+    "deve filtrar por nome do cliente",
+  );
+});
+
+test("listMonthSummaryRows não aplica filtro de busca quando search está ausente", async (t) => {
+  const originalFindMany = prisma.appointment.findMany;
+  const calls = [];
+
+  t.after(() => {
+    prisma.appointment.findMany = originalFindMany;
+  });
+
+  prisma.appointment.findMany = async (args) => {
+    calls.push(args);
+    return [];
+  };
+
+  await listMonthSummaryRows({ startDate: "2026-06-01", endDate: "2026-06-30" });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].where.OR, undefined, "não deve incluir cláusula OR sem search");
+});
+
+test("listMonthSummaryRows não aplica filtro de status quando status está ausente", async (t) => {
+  const originalFindMany = prisma.appointment.findMany;
+  const calls = [];
+
+  t.after(() => {
+    prisma.appointment.findMany = originalFindMany;
+  });
+
+  prisma.appointment.findMany = async (args) => {
+    calls.push(args);
+    return [];
+  };
+
+  await listMonthSummaryRows({ startDate: "2026-06-01", endDate: "2026-06-30" });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].where.status, undefined, "status ausente não deve restringir resultados");
+});
+
+test("listMonthSummaryRows filtra por status quando informado", async (t) => {
+  const originalFindMany = prisma.appointment.findMany;
+  const calls = [];
+
+  t.after(() => {
+    prisma.appointment.findMany = originalFindMany;
+  });
+
+  prisma.appointment.findMany = async (args) => {
+    calls.push(args);
+    return [];
+  };
+
+  await listMonthSummaryRows({ startDate: "2026-06-01", endDate: "2026-06-30", status: "SCHEDULED" });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].where.status, "SCHEDULED");
 });
