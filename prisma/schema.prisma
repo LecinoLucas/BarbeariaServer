@@ -56,6 +56,11 @@ enum ProductStatus {
   INACTIVE
 }
 
+enum ExpenseStatus {
+  ACTIVE
+  CANCELED
+}
+
 enum ReminderChannel {
   IN_APP
   EMAIL
@@ -99,6 +104,7 @@ model User {
   professional  Professional?
   client        Client?
   notifications Notification[]
+  expenses      Expense[]
 
   @@index([email])
   @@index([role])
@@ -452,6 +458,28 @@ model ProfessionalRecurringBlock {
   @@index([professionalId, dayOfWeek])
   @@index([professionalId, isActive])
   @@map("professional_recurring_blocks")
+}
+
+model Expense {
+  id              String        @id @default(cuid())
+  description     String
+  amountCents     Int
+  category        String?
+  expenseDate     DateTime
+  status          ExpenseStatus @default(ACTIVE)
+  notes           String?
+  createdByUserId String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  createdBy User? @relation(fields: [createdByUserId], references: [id])
+
+  @@index([expenseDate])
+  @@index([status, expenseDate])
+  @@index([category])
+  @@index([createdByUserId])
+  @@map("expenses")
 }
 
 model SystemSetting {

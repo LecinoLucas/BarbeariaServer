@@ -12,6 +12,7 @@ import {
   getTopServices,
   getUpcomingAppointments,
 } from "./dashboard.repository.js";
+import { getMonthExpensesCents } from "../expenses/expense.repository.js";
 
 function getDateRanges(now) {
   const startOfDay = new Date(now);
@@ -146,6 +147,7 @@ export async function getDashboard() {
   const [
     today,
     month,
+    monthExpensesCents,
     nextAppointment,
     birthdays,
     topClients,
@@ -159,6 +161,7 @@ export async function getDashboard() {
   ] = await Promise.all([
     getTodayStats({ startOfDay, endOfDay }),
     getMonthStats({ startOfMonth, endOfMonth }),
+    safe(getMonthExpensesCents({ startOfMonth, endOfMonth }), 0),
     safe(getNextAppointment(now), null),
     safe(getBirthdays(currentMonth), []),
     safe(getTopClients(), []),
@@ -176,9 +179,15 @@ export async function getDashboard() {
     }), { currentMonthRevenue: 0, previousMonthRevenue: 0 }),
   ]);
 
+  const expenses = roundToTwo(monthExpensesCents / 100);
+  const profit = roundToTwo(month.revenue - expenses);
+  const marginPercent = month.revenue > 0
+    ? roundToTwo((profit / month.revenue) * 100)
+    : null;
+
   return {
     today,
-    month,
+    month: { ...month, expenses, profit, marginPercent },
     nextAppointment,
     birthdays,
     topClients,

@@ -17,6 +17,7 @@ import recurringBlockRoutes from "../modules/recurringBlocks/recurringBlock.rout
 import reminderTemplateRoutes from "../modules/reminderTemplates/reminderTemplate.routes.js";
 import serviceRoutes from "../modules/services/service.routes.js";
 import productRoutes from "../modules/products/product.routes.js";
+import expenseRoutes from "../modules/expenses/expense.routes.js";
 import userRoutes from "../modules/users/user.routes.js";
 import prisma from "../database/prisma.js";
 
@@ -75,6 +76,7 @@ router.use("/appointment-reminders", appointmentReminderRoutes);
 router.use("/attendances", attendanceRoutes);
 router.use("/payments", paymentRoutes);
 router.use("/payment-methods", paymentMethodRoutes);
+router.use("/expenses", expenseRoutes);
 router.use("/settings", settingsRoutes);
 
 export default router;
