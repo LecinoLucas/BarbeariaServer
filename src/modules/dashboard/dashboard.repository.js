@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import prisma from "../../database/prisma.js";
+import { AGENDA_TIME_ZONE } from "../../utils/agendaTimezone.js";
 
 export async function getTodayStats({ startOfDay, endOfDay }) {
   const [appointments, attendancesInProgress, completedAttendances, revenueResult] =
@@ -356,14 +357,14 @@ export function getBusyHours({ startOfMonth, endOfMonth }) {
   return prisma.$queryRaw(
     Prisma.sql`
       SELECT
-        LPAD(EXTRACT(HOUR FROM a."startAt")::text, 2, '0') || ':00' AS "hour",
+        LPAD(EXTRACT(HOUR FROM a."startAt" AT TIME ZONE ${AGENDA_TIME_ZONE})::text, 2, '0') || ':00' AS "hour",
         COUNT(a."id")::int AS "appointments"
       FROM "appointments" a
       WHERE
         a."deletedAt" IS NULL
         AND a."startAt" >= ${startOfMonth}
         AND a."startAt" < ${endOfMonth}
-      GROUP BY EXTRACT(HOUR FROM a."startAt")
+      GROUP BY EXTRACT(HOUR FROM a."startAt" AT TIME ZONE ${AGENDA_TIME_ZONE})
       ORDER BY "appointments" DESC, "hour" ASC
     `,
   );
