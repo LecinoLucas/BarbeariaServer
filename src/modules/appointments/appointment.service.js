@@ -482,12 +482,21 @@ export async function createAppointment(payload, actor) {
 
   await createReminderForAppointment(appointment);
 
+  const timeFormatted = new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: AGENDA_TIME_ZONE,
+  }).format(new Date(appointment.startAt));
+
   await createNotificationsForAdmins({
     title: "Novo agendamento",
     message: "Um novo agendamento foi criado.",
     type: NOTIFICATION_TYPES.APPOINTMENT_CREATED,
     metadata: {
       appointmentId: appointment.id,
+      clientName: appointment.client?.name,
+      professionalName: appointment.professional?.name,
+      time: timeFormatted,
     },
   });
 
