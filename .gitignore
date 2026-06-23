@@ -12,6 +12,8 @@ logs/
 tmp/
 temp/
 uploads/
+storage/login-appearance/*
+!storage/login-appearance/.gitkeep
 *.sqlite
 *.sqlite3
 *.db

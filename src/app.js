@@ -9,6 +9,7 @@ import { apiRateLimiter } from "./middlewares/rateLimit.middleware.js";
 import { notFound } from "./middlewares/notFound.middleware.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
 import routes from "./routes/index.js";
+import { publicAssetPrefix, storageRoot } from "./modules/settings/settings.service.js";
 
 const app = express();
 
@@ -17,6 +18,7 @@ app.use(cors(corsOptions));
 app.use(morgan("dev"));
 app.use(express.json());
 app.use(cookieParser());
+app.use(publicAssetPrefix, express.static(storageRoot));
 
 app.use("/api", apiRateLimiter, routes);
 

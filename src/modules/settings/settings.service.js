@@ -1,6 +1,15 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { BadRequestError } from "../../errors/BadRequestError.js";
 import { getMany, upsertMany } from "./settings.repository.js";
 
-const ALL_KEYS = [
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const storageRoot = path.resolve(__dirname, "../../../storage/login-appearance");
+
+const GENERAL_KEYS = [
   "barbershop_name",
   "barbershop_phone",
   "barbershop_whatsapp",
@@ -22,7 +31,7 @@ const ALL_KEYS = [
   "allow_client_reschedule",
 ];
 
-const DEFAULTS = {
+const GENERAL_DEFAULTS = {
   barbershop_name: "",
   barbershop_phone: "",
   barbershop_whatsapp: "",
@@ -44,14 +53,48 @@ const DEFAULTS = {
   allow_client_reschedule: "true",
 };
 
+const LOGIN_APPEARANCE_KEYS = [
+  "login_appearance_hero_title",
+  "login_appearance_hero_subtitle",
+  "login_appearance_hero_eyebrow",
+  "login_appearance_button_text",
+  "login_appearance_background_image_url",
+  "login_appearance_background_image_alt",
+];
+
+export const LOGIN_APPEARANCE_DEFAULTS = {
+  heroTitle: "ESTILO NÃO É MODA, É IDENTIDADE.",
+  heroSubtitle:
+    "Gestão completa da sua barbearia em um só lugar. Mais tempo para o que realmente importa: seus clientes.",
+  heroEyebrow: "ALPHAMEN BARBEARIA",
+  loginButtonText: "ENTRAR",
+  backgroundImageUrl: null,
+  backgroundImageAlt: "Ambiente da barbearia AlphaMen",
+  updatedAt: null,
+};
+
+const allowedUploadMimeTypes = new Map([
+  ["image/jpeg", ".jpg"],
+  ["image/png", ".png"],
+  ["image/webp", ".webp"],
+]);
+
+const MAX_BACKGROUND_IMAGE_SIZE_BYTES = 2 * 1024 * 1024;
+const publicAssetPrefix = "/login-appearance-assets";
+
 function toSettingsMap(rows) {
   const map = {};
-  for (const row of rows) map[row.key] = row.value;
+
+  for (const row of rows) {
+    map[row.key] = row.value;
+    map[`${row.key}__updatedAt`] = row.updatedAt;
+  }
+
   return map;
 }
 
 function shapeSettings(map) {
-  const get = (key) => map[key] ?? DEFAULTS[key];
+  const get = (key) => map[key] ?? GENERAL_DEFAULTS[key];
 
   return {
     barbershopName: get("barbershop_name"),
@@ -79,7 +122,7 @@ function shapeSettings(map) {
   };
 }
 
-function toKeyValuePairs(payload) {
+function toGeneralKeyValuePairs(payload) {
   return [
     { key: "barbershop_name", value: payload.barbershopName },
     { key: "barbershop_phone", value: payload.phone },
@@ -106,14 +149,266 @@ function toKeyValuePairs(payload) {
   ];
 }
 
-export async function getSettings() {
-  const rows = await getMany(ALL_KEYS);
-  const map = toSettingsMap(rows);
-  return shapeSettings(map);
+function applyLoginAppearanceFallback(config) {
+  return {
+    heroTitle: config.heroTitle || LOGIN_APPEARANCE_DEFAULTS.heroTitle,
+    heroSubtitle:
+      config.heroSubtitle === null ? LOGIN_APPEARANCE_DEFAULTS.heroSubtitle : config.heroSubtitle,
+    heroEyebrow:
+      config.heroEyebrow === null ? LOGIN_APPEARANCE_DEFAULTS.heroEyebrow : config.heroEyebrow,
+    loginButtonText:
+      config.loginButtonText === null
+        ? LOGIN_APPEARANCE_DEFAULTS.loginButtonText
+        : config.loginButtonText,
+    backgroundImageUrl: config.backgroundImageUrl || LOGIN_APPEARANCE_DEFAULTS.backgroundImageUrl,
+    backgroundImageAlt:
+      config.backgroundImageAlt === null
+        ? LOGIN_APPEARANCE_DEFAULTS.backgroundImageAlt
+        : config.backgroundImageAlt,
+    updatedAt: config.updatedAt ?? LOGIN_APPEARANCE_DEFAULTS.updatedAt,
+  };
 }
 
-export async function updateSettings(payload) {
-  const pairs = toKeyValuePairs(payload);
-  await upsertMany(pairs);
-  return getSettings();
+function shapeLoginAppearance(map) {
+  const heroTitle = map.login_appearance_hero_title?.trim() || LOGIN_APPEARANCE_DEFAULTS.heroTitle;
+  const heroSubtitle = map.login_appearance_hero_subtitle?.trim() || null;
+  const heroEyebrow = map.login_appearance_hero_eyebrow?.trim() || null;
+  const loginButtonText = map.login_appearance_button_text?.trim() || null;
+  const backgroundImageUrl = map.login_appearance_background_image_url?.trim() || null;
+  const backgroundImageAlt = map.login_appearance_background_image_alt?.trim() || null;
+
+  const updatedAtCandidates = [
+    map.login_appearance_hero_title__updatedAt,
+    map.login_appearance_hero_subtitle__updatedAt,
+    map.login_appearance_hero_eyebrow__updatedAt,
+    map.login_appearance_button_text__updatedAt,
+    map.login_appearance_background_image_url__updatedAt,
+    map.login_appearance_background_image_alt__updatedAt,
+  ].filter(Boolean);
+
+  const updatedAt =
+    updatedAtCandidates.length > 0
+      ? new Date(
+          Math.max(
+            ...updatedAtCandidates.map((value) =>
+              value instanceof Date ? value.getTime() : new Date(value).getTime(),
+            ),
+          ),
+        ).toISOString()
+      : null;
+
+  return applyLoginAppearanceFallback({
+    heroTitle,
+    heroSubtitle,
+    heroEyebrow,
+    loginButtonText,
+    backgroundImageUrl,
+    backgroundImageAlt,
+    updatedAt,
+  });
 }
+
+function toLoginAppearanceKeyValuePairs(payload) {
+  return [
+    { key: "login_appearance_hero_title", value: payload.heroTitle },
+    { key: "login_appearance_hero_subtitle", value: payload.heroSubtitle ?? "" },
+    { key: "login_appearance_hero_eyebrow", value: payload.heroEyebrow ?? "" },
+    { key: "login_appearance_button_text", value: payload.loginButtonText ?? "" },
+    {
+      key: "login_appearance_background_image_url",
+      value: payload.backgroundImageUrl ?? "",
+    },
+    {
+      key: "login_appearance_background_image_alt",
+      value: payload.backgroundImageAlt ?? "",
+    },
+  ];
+}
+
+function getFilenameFromUrl(urlValue) {
+  if (!urlValue || !urlValue.startsWith(`${publicAssetPrefix}/`)) {
+    return null;
+  }
+
+  const filename = path.basename(urlValue);
+  return filename && filename !== "." ? filename : null;
+}
+
+async function ensureStorageDir() {
+  await fs.mkdir(storageRoot, { recursive: true });
+}
+
+async function removeStoredBackgroundImage(urlValue) {
+  const filename = getFilenameFromUrl(urlValue);
+
+  if (!filename) {
+    return;
+  }
+
+  const targetPath = path.join(storageRoot, filename);
+  await fs.rm(targetPath, { force: true });
+}
+
+function sanitizeFileStem(value) {
+  const stem = path.basename(value, path.extname(value)).toLowerCase();
+  const sanitized = stem.replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+  return sanitized || "background";
+}
+
+function validateUploadInput({ body, mimeType, originalName }) {
+  if (!Buffer.isBuffer(body) || body.length === 0) {
+    throw new BadRequestError("Envie uma imagem válida no corpo da requisição.");
+  }
+
+  if (body.length > MAX_BACKGROUND_IMAGE_SIZE_BYTES) {
+    throw new BadRequestError("A imagem de fundo deve ter no máximo 2 MB.");
+  }
+
+  const normalizedMimeType = typeof mimeType === "string" ? mimeType.toLowerCase().trim() : "";
+  const allowedExtension = allowedUploadMimeTypes.get(normalizedMimeType);
+
+  if (!allowedExtension) {
+    throw new BadRequestError("Formato inválido. Use JPG, PNG ou WEBP.");
+  }
+
+  const normalizedOriginalName =
+    typeof originalName === "string" ? originalName.trim() : "background";
+  const originalExtension = path.extname(normalizedOriginalName).toLowerCase();
+
+  if (originalExtension && originalExtension !== allowedExtension) {
+    throw new BadRequestError("A extensão do arquivo não corresponde ao tipo enviado.");
+  }
+
+  return {
+    extension: allowedExtension,
+    safeStem: sanitizeFileStem(normalizedOriginalName),
+  };
+}
+
+export function createSettingsService(deps = {}) {
+  const repository = {
+    getMany: deps.getMany ?? getMany,
+    upsertMany: deps.upsertMany ?? upsertMany,
+    ensureStorageDir: deps.ensureStorageDir ?? ensureStorageDir,
+    removeStoredBackgroundImage:
+      deps.removeStoredBackgroundImage ?? removeStoredBackgroundImage,
+    writeFile: deps.writeFile ?? fs.writeFile,
+  };
+
+  async function getSettings() {
+    const rows = await repository.getMany(GENERAL_KEYS);
+    const map = toSettingsMap(rows);
+    return shapeSettings(map);
+  }
+
+  async function updateSettings(payload) {
+    await repository.upsertMany(toGeneralKeyValuePairs(payload));
+    return getSettings();
+  }
+
+  async function getLoginAppearance() {
+    const rows = await repository.getMany(LOGIN_APPEARANCE_KEYS);
+    return shapeLoginAppearance(toSettingsMap(rows));
+  }
+
+  async function updateLoginAppearance(payload) {
+    const current = await getLoginAppearance();
+    const nextPayload = {
+      heroTitle: payload.heroTitle || LOGIN_APPEARANCE_DEFAULTS.heroTitle,
+      heroSubtitle: payload.heroSubtitle,
+      heroEyebrow: payload.heroEyebrow,
+      loginButtonText: payload.loginButtonText,
+      backgroundImageUrl: payload.backgroundImageUrl ?? current.backgroundImageUrl,
+      backgroundImageAlt: payload.backgroundImageAlt,
+    };
+
+    await repository.upsertMany(toLoginAppearanceKeyValuePairs(nextPayload));
+    return getLoginAppearance();
+  }
+
+  async function getPublicLoginAppearance() {
+    const appearance = await getLoginAppearance();
+
+    return {
+      heroTitle: appearance.heroTitle,
+      heroSubtitle: appearance.heroSubtitle,
+      heroEyebrow: appearance.heroEyebrow,
+      loginButtonText: appearance.loginButtonText,
+      backgroundImageUrl: appearance.backgroundImageUrl,
+      backgroundImageAlt: appearance.backgroundImageAlt,
+      updatedAt: appearance.updatedAt,
+    };
+  }
+
+  async function saveLoginAppearanceBackground({ body, mimeType, originalName }) {
+    const current = await getLoginAppearance();
+    const { extension, safeStem } = validateUploadInput({
+      body,
+      mimeType,
+      originalName,
+    });
+
+    const filename = `${Date.now()}-${safeStem}${extension}`;
+    const publicPath = `${publicAssetPrefix}/${filename}`;
+    const outputPath = path.join(storageRoot, filename);
+
+    await repository.ensureStorageDir();
+    await repository.writeFile(outputPath, body);
+    await repository.upsertMany([
+      { key: "login_appearance_background_image_url", value: publicPath },
+    ]);
+
+    if (current.backgroundImageUrl && current.backgroundImageUrl !== publicPath) {
+      await repository.removeStoredBackgroundImage(current.backgroundImageUrl);
+    }
+
+    return {
+      backgroundImageUrl: publicPath,
+    };
+  }
+
+  async function restoreDefaultLoginAppearance() {
+    const current = await getLoginAppearance();
+
+    await repository.upsertMany(
+      toLoginAppearanceKeyValuePairs({
+        heroTitle: LOGIN_APPEARANCE_DEFAULTS.heroTitle,
+        heroSubtitle: "",
+        heroEyebrow: "",
+        loginButtonText: "",
+        backgroundImageUrl: "",
+        backgroundImageAlt: "",
+      }),
+    );
+
+    if (current.backgroundImageUrl) {
+      await repository.removeStoredBackgroundImage(current.backgroundImageUrl);
+    }
+
+    return getLoginAppearance();
+  }
+
+  return {
+    getSettings,
+    updateSettings,
+    getLoginAppearance,
+    updateLoginAppearance,
+    getPublicLoginAppearance,
+    saveLoginAppearanceBackground,
+    restoreDefaultLoginAppearance,
+  };
+}
+
+const settingsService = createSettingsService();
+
+export const {
+  getSettings,
+  updateSettings,
+  getLoginAppearance,
+  updateLoginAppearance,
+  getPublicLoginAppearance,
+  saveLoginAppearanceBackground,
+  restoreDefaultLoginAppearance,
+} = settingsService;
+
+export { MAX_BACKGROUND_IMAGE_SIZE_BYTES, publicAssetPrefix, storageRoot };

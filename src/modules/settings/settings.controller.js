@@ -1,6 +1,17 @@
 import { successResponse } from "../../utils/response.js";
-import { getSettings, updateSettings } from "./settings.service.js";
-import { validateSettings } from "./settings.validator.js";
+import {
+  getLoginAppearance,
+  getPublicLoginAppearance,
+  getSettings,
+  restoreDefaultLoginAppearance,
+  saveLoginAppearanceBackground,
+  updateLoginAppearance,
+  updateSettings,
+} from "./settings.service.js";
+import {
+  validateLoginAppearance,
+  validateSettings,
+} from "./settings.validator.js";
 
 export async function getSettingsHandler(req, res, next) {
   try {
@@ -16,6 +27,57 @@ export async function updateSettingsHandler(req, res, next) {
     const data = validateSettings(req.body);
     const settings = await updateSettings(data);
     return successResponse(res, settings, "Configurações atualizadas com sucesso.");
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function getLoginAppearanceHandler(req, res, next) {
+  try {
+    const settings = await getLoginAppearance();
+    return successResponse(res, settings, "Aparência do login carregada com sucesso.");
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function getPublicLoginAppearanceHandler(req, res, next) {
+  try {
+    const settings = await getPublicLoginAppearance();
+    return successResponse(res, settings, "Aparência pública do login carregada com sucesso.");
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function updateLoginAppearanceHandler(req, res, next) {
+  try {
+    const data = validateLoginAppearance(req.body);
+    const settings = await updateLoginAppearance(data);
+    return successResponse(res, settings, "Aparência do login atualizada com sucesso.");
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function uploadLoginAppearanceBackgroundHandler(req, res, next) {
+  try {
+    const payload = await saveLoginAppearanceBackground({
+      body: req.body,
+      mimeType: req.headers["content-type"],
+      originalName: req.headers["x-file-name"],
+    });
+
+    return successResponse(res, payload, "Imagem de fundo atualizada com sucesso.");
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function restoreDefaultLoginAppearanceHandler(req, res, next) {
+  try {
+    const settings = await restoreDefaultLoginAppearance();
+    return successResponse(res, settings, "Aparência do login restaurada com sucesso.");
   } catch (error) {
     return next(error);
   }

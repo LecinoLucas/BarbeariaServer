@@ -3,6 +3,44 @@ import { z } from "zod";
 import { ValidationError } from "../../errors/ValidationError.js";
 
 const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+const htmlLikeRegex = /<[^>]+>/;
+const dangerousScriptRegex = /<\s*script\b|javascript:/i;
+
+function rejectUnsafeText(fieldLabel, maxLength, { required = false } = {}) {
+  let schema = z.string().trim();
+
+  if (required) {
+    schema = schema
+      .min(1, `${fieldLabel} é obrigatório.`)
+      .max(maxLength, `${fieldLabel} deve ter no máximo ${maxLength} caracteres.`);
+  } else {
+    schema = schema
+      .max(maxLength, `${fieldLabel} deve ter no máximo ${maxLength} caracteres.`)
+      .optional()
+      .nullable()
+      .transform((value) => {
+        if (typeof value !== "string") {
+          return null;
+        }
+
+        const trimmed = value.trim();
+        return trimmed.length > 0 ? trimmed : null;
+      });
+  }
+
+  return schema.refine(
+    (value) => {
+      if (!value) return true;
+      return !htmlLikeRegex.test(value) && !dangerousScriptRegex.test(value);
+    },
+    `${fieldLabel} não pode conter HTML ou script.`,
+  );
+}
+
+const internalAssetPathRegex = /^\/login-appearance-assets\/[a-z0-9][a-z0-9._-]*$/i;
+const externalHttpUrlSchema = z.string().url().refine((value) => /^https?:\/\//i.test(value), {
+  message: "backgroundImageUrl deve ser uma URL http(s) válida.",
+});
 
 export const settingsSchema = z.object({
   barbershopName: z
@@ -69,6 +107,31 @@ export const settingsSchema = z.object({
   allowClientReschedule: z.boolean({ required_error: "allowClientReschedule é obrigatório.", invalid_type_error: "allowClientReschedule deve ser boolean." }),
 });
 
+export const loginAppearanceSchema = z.object({
+  heroTitle: rejectUnsafeText("Texto principal", 100, { required: true }),
+  heroSubtitle: rejectUnsafeText("Subtítulo", 240),
+  heroEyebrow: rejectUnsafeText("Texto de destaque", 60),
+  loginButtonText: rejectUnsafeText("Texto do botão", 40),
+  backgroundImageAlt: rejectUnsafeText("Texto alternativo da imagem", 120),
+  backgroundImageUrl: z.preprocess(
+    (value) => {
+      if (typeof value !== "string") {
+        return value ?? null;
+      }
+
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    },
+    z
+      .union([
+        externalHttpUrlSchema,
+        z.string().regex(internalAssetPathRegex, "backgroundImageUrl inválida."),
+      ])
+      .nullable()
+      .optional(),
+  ),
+});
+
 function parseOrThrow(schema, payload) {
   const result = schema.safeParse(payload);
   if (!result.success) throw new ValidationError(result.error);
@@ -77,4 +140,8 @@ function parseOrThrow(schema, payload) {
 
 export function validateSettings(payload) {
   return parseOrThrow(settingsSchema, payload);
+}
+
+export function validateLoginAppearance(payload) {
+  return parseOrThrow(loginAppearanceSchema, payload);
 }
