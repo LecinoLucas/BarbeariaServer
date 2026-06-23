@@ -270,6 +270,11 @@ export function findAttendanceForPayment(attendanceId) {
           total: true,
         },
       },
+      productItems: {
+        select: {
+          totalPriceCents: true,
+        },
+      },
     },
   });
 }

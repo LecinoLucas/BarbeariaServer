@@ -1,20 +1,26 @@
 import { successResponse } from "../../utils/response.js";
 import {
   addItem,
+  addProduct,
   cancelAttendance,
   finishAttendance,
   finishAttendanceWithPayment,
   getAttendanceById,
   getAttendances,
   getItems,
+  getProducts,
   removeItem,
+  removeProduct,
   startAttendance,
+  updateProductQuantity,
 } from "./attendance.service.js";
 import {
   validateAddAttendanceItem,
+  validateAddAttendanceProduct,
   validateFinishAttendanceWithPayment,
   validateListAttendancesQuery,
   validateStartAttendance,
+  validateUpdateAttendanceProduct,
 } from "./attendance.validator.js";
 
 
@@ -64,6 +70,22 @@ export async function listItemsHandler(req, res, next) {
   } catch (error) {
     return next(error);
   }
+}
+
+export async function addProductHandler(req, res, next) {
+  try { return successResponse(res, await addProduct(req.params.attendanceId, validateAddAttendanceProduct(req.body), req.user), "Produto adicionado com sucesso.", 201); } catch (error) { return next(error); }
+}
+
+export async function listProductsHandler(req, res, next) {
+  try { return successResponse(res, await getProducts(req.params.attendanceId, req.user), "Produtos listados com sucesso."); } catch (error) { return next(error); }
+}
+
+export async function updateProductQuantityHandler(req, res, next) {
+  try { return successResponse(res, await updateProductQuantity(req.params.attendanceId, req.params.itemId, validateUpdateAttendanceProduct(req.body), req.user), "Quantidade atualizada com sucesso."); } catch (error) { return next(error); }
+}
+
+export async function removeProductHandler(req, res, next) {
+  try { await removeProduct(req.params.attendanceId, req.params.itemId, req.user); return successResponse(res, null, "Produto removido com sucesso."); } catch (error) { return next(error); }
 }
 
 export async function removeItemHandler(req, res, next) {

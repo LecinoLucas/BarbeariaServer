@@ -51,6 +51,11 @@ enum PaymentMethod {
   OTHER
 }
 
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum ReminderChannel {
   IN_APP
   EMAIL
@@ -126,22 +131,22 @@ model Client {
 }
 
 model Professional {
-  id                        String     @id @default(cuid())
-  userId                    String?    @unique
-  name                      String
-  phone                     String?
-  specialty                 String?
+  id                         String     @id @default(cuid())
+  userId                     String?    @unique
+  name                       String
+  phone                      String?
+  specialty                  String?
   appointmentIntervalMinutes Int?
-  status                    UserStatus @default(ACTIVE)
-  createdAt                 DateTime   @default(now())
-  updatedAt                 DateTime   @updatedAt
-  deletedAt                 DateTime?
+  status                     UserStatus @default(ACTIVE)
+  createdAt                  DateTime   @default(now())
+  updatedAt                  DateTime   @updatedAt
+  deletedAt                  DateTime?
 
-  user         User?         @relation(fields: [userId], references: [id])
-  appointments Appointment[]
-  attendances  Attendance[]
-  schedules    ProfessionalSchedule[]
-  scheduleBlocks ScheduleBlock[]
+  user            User?                        @relation(fields: [userId], references: [id])
+  appointments    Appointment[]
+  attendances     Attendance[]
+  schedules       ProfessionalSchedule[]
+  scheduleBlocks  ScheduleBlock[]
   recurringBlocks ProfessionalRecurringBlock[]
 
   @@index([name])
@@ -150,14 +155,14 @@ model Professional {
 }
 
 model ProfessionalSchedule {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   professionalId String
   weekday        Int
   openTime       String
   closeTime      String
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
   professional Professional @relation(fields: [professionalId], references: [id])
@@ -171,15 +176,15 @@ model ProfessionalSchedule {
 }
 
 model ScheduleBlock {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   professionalId String
   title          String
   reason         String?
   startAt        DateTime
   endAt          DateTime
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
   professional Professional @relation(fields: [professionalId], references: [id])
@@ -214,6 +219,28 @@ model Service {
   @@map("services")
 }
 
+model Product {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  sku         String?       @unique
+  barcode     String?
+  priceCents  Int
+  costCents   Int?
+  status      ProductStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+
+  attendanceProductItems AttendanceProductItem[]
+
+  @@index([status])
+  @@index([name])
+  @@index([sku])
+  @@index([barcode])
+  @@map("products")
+}
+
 model Appointment {
   id             String            @id @default(cuid())
   clientId       String
@@ -227,9 +254,9 @@ model Appointment {
   updatedAt      DateTime          @updatedAt
   deletedAt      DateTime?
 
-  client       Client       @relation(fields: [clientId], references: [id])
-  professional Professional @relation(fields: [professionalId], references: [id])
-  service      Service      @relation(fields: [serviceId], references: [id])
+  client       Client                @relation(fields: [clientId], references: [id])
+  professional Professional          @relation(fields: [professionalId], references: [id])
+  service      Service               @relation(fields: [serviceId], references: [id])
   attendance   Attendance?
   reminders    AppointmentReminder[]
 
@@ -296,16 +323,38 @@ model Attendance {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
-  appointment  Appointment      @relation(fields: [appointmentId], references: [id])
-  client       Client           @relation(fields: [clientId], references: [id])
-  professional Professional     @relation(fields: [professionalId], references: [id])
+  appointment  Appointment             @relation(fields: [appointmentId], references: [id])
+  client       Client                  @relation(fields: [clientId], references: [id])
+  professional Professional            @relation(fields: [professionalId], references: [id])
   items        AttendanceItem[]
+  productItems AttendanceProductItem[]
   payment      Payment?
 
   @@index([clientId])
   @@index([professionalId])
   @@index([status])
   @@map("attendances")
+}
+
+model AttendanceProductItem {
+  id                  String   @id @default(cuid())
+  attendanceId        String
+  productId           String
+  quantity            Int
+  unitPriceCents      Int
+  totalPriceCents     Int
+  productNameSnapshot String
+  productSkuSnapshot  String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  attendance Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id])
+
+  @@unique([attendanceId, productId])
+  @@index([attendanceId])
+  @@index([productId])
+  @@map("attendance_product_items")
 }
 
 model AttendanceItem {
@@ -328,20 +377,20 @@ model AttendanceItem {
 }
 
 model Payment {
-  id                    String        @id @default(cuid())
-  attendanceId          String        @unique
-  amount                Decimal       @db.Decimal(10, 2)
-  discount              Decimal       @db.Decimal(10, 2) @default(0)
-  total                 Decimal       @db.Decimal(10, 2)
-  paymentMethod         PaymentMethod?
-  paymentMethodId       String?
-  status                PaymentStatus @default(PENDING)
-  paidAt                DateTime?
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
+  id              String         @id @default(cuid())
+  attendanceId    String         @unique
+  amount          Decimal        @db.Decimal(10, 2)
+  discount        Decimal        @default(0) @db.Decimal(10, 2)
+  total           Decimal        @db.Decimal(10, 2)
+  paymentMethod   PaymentMethod?
+  paymentMethodId String?
+  status          PaymentStatus  @default(PENDING)
+  paidAt          DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
-  attendance            Attendance            @relation(fields: [attendanceId], references: [id])
-  paymentMethodConfig   PaymentMethodConfig?  @relation(fields: [paymentMethodId], references: [id])
+  attendance          Attendance           @relation(fields: [attendanceId], references: [id])
+  paymentMethodConfig PaymentMethodConfig? @relation(fields: [paymentMethodId], references: [id])
 
   @@index([status])
   @@index([paymentMethod])
@@ -351,14 +400,14 @@ model Payment {
 }
 
 model PaymentMethodConfig {
-  id           String    @id @default(cuid())
-  code         String    @unique
+  id           String   @id @default(cuid())
+  code         String   @unique
   name         String
   description  String?
-  isActive     Boolean   @default(true)
-  displayOrder Int       @default(0)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  isActive     Boolean  @default(true)
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   payments Payment[]
 

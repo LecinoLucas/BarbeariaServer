@@ -16,6 +16,7 @@ import scheduleBlockRoutes from "../modules/scheduleBlocks/scheduleBlock.routes.
 import recurringBlockRoutes from "../modules/recurringBlocks/recurringBlock.routes.js";
 import reminderTemplateRoutes from "../modules/reminderTemplates/reminderTemplate.routes.js";
 import serviceRoutes from "../modules/services/service.routes.js";
+import productRoutes from "../modules/products/product.routes.js";
 import userRoutes from "../modules/users/user.routes.js";
 import prisma from "../database/prisma.js";
 
@@ -67,6 +68,7 @@ router.use("/professional-schedules", professionalScheduleRoutes);
 router.use("/schedule-blocks", scheduleBlockRoutes);
 router.use("/professional-recurring-blocks", recurringBlockRoutes);
 router.use("/services", serviceRoutes);
+router.use("/products", productRoutes);
 router.use("/reminder-templates", reminderTemplateRoutes);
 router.use("/appointments", appointmentRoutes);
 router.use("/appointment-reminders", appointmentReminderRoutes);

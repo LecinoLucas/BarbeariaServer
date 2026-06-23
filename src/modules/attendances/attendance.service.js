@@ -21,6 +21,8 @@ import {
   countAttendances,
   createAttendance,
   createAttendanceItem,
+  addOrIncrementAttendanceProductItem,
+  deleteAttendanceProductItem,
   deleteAttendanceItem,
   findAppointmentById,
   findAttendanceById,
@@ -31,13 +33,16 @@ import {
   finishAttendance as repoFinishAttendance,
   finishAttendanceWithPayment as repoFinishAttendanceWithPayment,
   listAttendanceItems,
+  listAttendanceProductItems,
   listAttendances,
+  updateAttendanceProductItemQuantity,
 } from "./attendance.repository.js";
 import { withAttendanceTotal, withAttendanceTotals } from "./attendance.utils.js";
 
 const NOT_FOUND_ATTENDANCE = "Atendimento não encontrado.";
 const NOT_FOUND_APPOINTMENT = "Agendamento não encontrado.";
 const NOT_FOUND_ITEM = "Item não encontrado.";
+const NOT_FOUND_PRODUCT_ITEM = "Produto vendido não encontrado.";
 const ACCESS_DENIED = "Acesso negado.";
 const ATTENDANCE_NOT_OPEN = "Atendimento não está aberto.";
 const legacyPaymentMethodValues = new Set(Object.values(PAYMENT_METHODS));
@@ -76,6 +81,30 @@ async function ensureAttendanceAccess(actor, attendance) {
 async function ensureAttendanceOpen(attendance) {
   if (attendance.status !== ATTENDANCE_STATUS.OPEN) {
     throw new BadRequestError(ATTENDANCE_NOT_OPEN);
+  }
+}
+
+async function ensureAttendanceProductEditable(attendance) {
+  if (attendance.payment?.status === PAYMENT_STATUS.PAID) {
+    throw new BadRequestError("Não é possível alterar produtos de um atendimento pago.");
+  }
+  if (attendance.status !== ATTENDANCE_STATUS.OPEN) {
+    throw new BadRequestError("Não é possível alterar produtos de um atendimento finalizado.");
+  }
+  if (attendance.payment) {
+    throw new BadRequestError("Não é possível alterar produtos após gerar um pagamento.");
+  }
+}
+
+function ensureProductTransactionEditable(result) {
+  if (!result) {
+    throw new BadRequestError("Não é possível alterar produtos de um atendimento finalizado.");
+  }
+  if (result.paymentStatus === PAYMENT_STATUS.PAID) {
+    throw new BadRequestError("Não é possível alterar produtos de um atendimento pago.");
+  }
+  if (result.paymentStatus) {
+    throw new BadRequestError("Não é possível alterar produtos após gerar um pagamento.");
   }
 }
 
@@ -228,6 +257,47 @@ export async function getItems(attendanceId, actor) {
   await ensureAttendanceAccess(actor, attendance);
 
   return listAttendanceItems(attendanceId);
+}
+
+export async function addProduct(attendanceId, payload, actor) {
+  const attendance = await findAttendanceById(attendanceId);
+  if (!attendance) throw new NotFoundError(NOT_FOUND_ATTENDANCE);
+  await ensureAttendanceAccess(actor, attendance);
+  await ensureAttendanceProductEditable(attendance);
+
+  const result = await addOrIncrementAttendanceProductItem(attendanceId, payload.productId, payload.quantity);
+  ensureProductTransactionEditable(result);
+  if (result.product === null) throw new BadRequestError("Produto não encontrado ou inativo.");
+  if (result.limitExceeded) throw new BadRequestError("Quantidade máxima por produto é 999.");
+  return result;
+}
+
+export async function getProducts(attendanceId, actor) {
+  const attendance = await findAttendanceById(attendanceId);
+  if (!attendance) throw new NotFoundError(NOT_FOUND_ATTENDANCE);
+  await ensureAttendanceAccess(actor, attendance);
+  return listAttendanceProductItems(attendanceId);
+}
+
+export async function updateProductQuantity(attendanceId, itemId, payload, actor) {
+  const attendance = await findAttendanceById(attendanceId);
+  if (!attendance) throw new NotFoundError(NOT_FOUND_ATTENDANCE);
+  await ensureAttendanceAccess(actor, attendance);
+  await ensureAttendanceProductEditable(attendance);
+  const result = await updateAttendanceProductItemQuantity(attendanceId, itemId, payload.quantity);
+  ensureProductTransactionEditable(result);
+  if (result.item === null) throw new NotFoundError(NOT_FOUND_PRODUCT_ITEM);
+  return result;
+}
+
+export async function removeProduct(attendanceId, itemId, actor) {
+  const attendance = await findAttendanceById(attendanceId);
+  if (!attendance) throw new NotFoundError(NOT_FOUND_ATTENDANCE);
+  await ensureAttendanceAccess(actor, attendance);
+  await ensureAttendanceProductEditable(attendance);
+  const result = await deleteAttendanceProductItem(attendanceId, itemId);
+  ensureProductTransactionEditable(result);
+  if (result.item === null) throw new NotFoundError(NOT_FOUND_PRODUCT_ITEM);
 }
 
 export async function removeItem(attendanceId, itemId, actor) {

@@ -5,14 +5,18 @@ import { authenticate } from "../../middlewares/auth.middleware.js";
 import { authorizeRoles } from "../../middlewares/role.middleware.js";
 import {
   addItemHandler,
+  addProductHandler,
   cancelAttendanceHandler,
   finishAttendanceHandler,
   finishAttendanceWithPaymentHandler,
   getAttendanceByIdHandler,
   listAttendancesHandler,
   listItemsHandler,
+  listProductsHandler,
   removeItemHandler,
+  removeProductHandler,
   startAttendanceHandler,
+  updateProductQuantityHandler,
 } from "./attendance.controller.js";
 
 const router = Router();
@@ -28,6 +32,11 @@ router.get("/:id", getAttendanceByIdHandler);
 
 router.post("/:id/items", addItemHandler);
 router.get("/:id/items", listItemsHandler);
+
+router.get("/:attendanceId/products", listProductsHandler);
+router.post("/:attendanceId/products", addProductHandler);
+router.patch("/:attendanceId/products/:itemId", updateProductQuantityHandler);
+router.delete("/:attendanceId/products/:itemId", removeProductHandler);
 
 router.delete(
   "/:attendanceId/items/:itemId",

@@ -9,7 +9,7 @@ import { ConflictError } from "../../errors/ConflictError.js";
 import { ForbiddenError } from "../../errors/ForbiddenError.js";
 import { NotFoundError } from "../../errors/NotFoundError.js";
 import { UnauthorizedError } from "../../errors/UnauthorizedError.js";
-import { calculateAttendanceTotal, withAttendanceTotal } from "../attendances/attendance.utils.js";
+import { calculateAttendanceTotals, withAttendanceTotal } from "../attendances/attendance.utils.js";
 import {
   cancel,
   count,
@@ -99,7 +99,7 @@ export async function createPayment(payload) {
     throw new ConflictError("Já existe um pagamento para este atendimento.");
   }
 
-  const amount = calculateAttendanceTotal(attendance);
+  const amount = calculateAttendanceTotals(attendance).grandTotalCents / 100;
 
   const payment = await create({
     attendanceId: payload.attendanceId,

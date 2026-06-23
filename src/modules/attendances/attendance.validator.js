@@ -36,6 +36,15 @@ export const addAttendanceItemSchema = z.object({
     .min(1, "quantity mínimo é 1."),
 });
 
+export const addAttendanceProductSchema = z.object({
+  productId: z.string({ required_error: "productId é obrigatório." }).min(1, "productId inválido."),
+  quantity: z.coerce.number({ required_error: "quantity é obrigatório." }).int("quantity deve ser inteiro.").min(1, "quantity mínimo é 1.").max(999, "quantity máximo é 999."),
+});
+
+export const updateAttendanceProductSchema = z.object({
+  quantity: z.coerce.number({ required_error: "quantity é obrigatório." }).int("quantity deve ser inteiro.").min(1, "quantity mínimo é 1.").max(999, "quantity máximo é 999."),
+});
+
 export const listAttendancesQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(10),
@@ -76,6 +85,14 @@ export function validateStartAttendance(payload) {
 
 export function validateAddAttendanceItem(payload) {
   return parseOrThrow(addAttendanceItemSchema, payload);
+}
+
+export function validateAddAttendanceProduct(payload) {
+  return parseOrThrow(addAttendanceProductSchema, payload);
+}
+
+export function validateUpdateAttendanceProduct(payload) {
+  return parseOrThrow(updateAttendanceProductSchema, payload);
 }
 
 export function validateListAttendancesQuery(payload) {

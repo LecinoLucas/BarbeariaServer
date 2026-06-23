@@ -1,6 +1,6 @@
 import prisma from "../../database/prisma.js";
 import { ConflictError } from "../../errors/ConflictError.js";
-import { calculateAttendanceTotal } from "./attendance.utils.js";
+import { calculateAttendanceTotals } from "./attendance.utils.js";
 
 const paymentSelect = {
   id: true,
@@ -57,6 +57,10 @@ const attendanceListSelect = {
     },
     orderBy: { createdAt: "asc" },
   },
+  productItems: {
+    select: { id: true, productId: true, quantity: true, unitPriceCents: true, totalPriceCents: true, productNameSnapshot: true, productSkuSnapshot: true, createdAt: true },
+    orderBy: { createdAt: "asc" },
+  },
   payment: {
     select: paymentSelect,
   },
@@ -99,6 +103,10 @@ const attendanceDetailSelect = {
     },
     orderBy: { createdAt: "asc" },
   },
+  productItems: {
+    select: { id: true, productId: true, quantity: true, unitPriceCents: true, totalPriceCents: true, productNameSnapshot: true, productSkuSnapshot: true, createdAt: true, updatedAt: true },
+    orderBy: { createdAt: "asc" },
+  },
   payment: {
     select: paymentSelect,
   },
@@ -114,6 +122,11 @@ const itemSelect = {
   total: true,
   createdAt: true,
   updatedAt: true,
+};
+
+const productItemSelect = {
+  id: true, attendanceId: true, productId: true, quantity: true, unitPriceCents: true,
+  totalPriceCents: true, productNameSnapshot: true, productSkuSnapshot: true, createdAt: true, updatedAt: true,
 };
 
 function buildWhere(filters) {
@@ -226,6 +239,62 @@ export function deleteAttendanceItem(id) {
   return prisma.attendanceItem.delete({ where: { id } });
 }
 
+export function listAttendanceProductItems(attendanceId) {
+  return prisma.attendanceProductItem.findMany({ where: { attendanceId }, select: productItemSelect, orderBy: { createdAt: "asc" } });
+}
+
+export async function addOrIncrementAttendanceProductItem(attendanceId, productId, quantity) {
+  return prisma.$transaction(async (tx) => {
+    const attendance = await tx.attendance.findFirst({ where: { id: attendanceId }, select: { id: true, status: true } });
+    if (!attendance || attendance.status !== "OPEN") return null;
+    const payment = await tx.payment.findFirst({ where: { attendanceId }, select: { id: true, status: true } });
+    if (payment) return { paymentStatus: payment.status };
+    const product = await tx.product.findFirst({
+      where: { id: productId, deletedAt: null, status: "ACTIVE" },
+      select: { id: true, name: true, sku: true, priceCents: true },
+    });
+    if (!product) return { product: null };
+    const existing = await tx.attendanceProductItem.findUnique({
+      where: { attendanceId_productId: { attendanceId, productId } },
+      select: { id: true, quantity: true, unitPriceCents: true },
+    });
+    if (existing) {
+      const nextQuantity = existing.quantity + quantity;
+      if (nextQuantity > 999) return { product, limitExceeded: true };
+      return tx.attendanceProductItem.update({ where: { id: existing.id }, data: { quantity: nextQuantity, totalPriceCents: nextQuantity * existing.unitPriceCents }, select: productItemSelect });
+    }
+    return tx.attendanceProductItem.create({
+      data: { attendanceId, productId: product.id, quantity, unitPriceCents: product.priceCents, totalPriceCents: quantity * product.priceCents, productNameSnapshot: product.name, productSkuSnapshot: product.sku },
+      select: productItemSelect,
+    });
+  });
+}
+
+export async function updateAttendanceProductItemQuantity(attendanceId, itemId, quantity) {
+  return prisma.$transaction(async (tx) => {
+    const attendance = await tx.attendance.findFirst({ where: { id: attendanceId }, select: { id: true, status: true } });
+    if (!attendance || attendance.status !== "OPEN") return null;
+    const payment = await tx.payment.findFirst({ where: { attendanceId }, select: { id: true, status: true } });
+    if (payment) return { paymentStatus: payment.status };
+    const item = await tx.attendanceProductItem.findFirst({ where: { id: itemId, attendanceId }, select: { id: true, unitPriceCents: true } });
+    if (!item) return { item: null };
+    return tx.attendanceProductItem.update({ where: { id: item.id }, data: { quantity, totalPriceCents: quantity * item.unitPriceCents }, select: productItemSelect });
+  });
+}
+
+export async function deleteAttendanceProductItem(attendanceId, itemId) {
+  return prisma.$transaction(async (tx) => {
+    const attendance = await tx.attendance.findFirst({ where: { id: attendanceId }, select: { id: true, status: true } });
+    if (!attendance || attendance.status !== "OPEN") return null;
+    const payment = await tx.payment.findFirst({ where: { attendanceId }, select: { id: true, status: true } });
+    if (payment) return { paymentStatus: payment.status };
+    const item = await tx.attendanceProductItem.findFirst({ where: { id: itemId, attendanceId }, select: { id: true } });
+    if (!item) return { item: null };
+    await tx.attendanceProductItem.delete({ where: { id: item.id } });
+    return { item: true };
+  });
+}
+
 export async function createAttendance({ appointmentId, clientId, professionalId }) {
   return prisma.$transaction(async (tx) => {
     const attendance = await tx.attendance.create({
@@ -255,7 +324,7 @@ export async function finishAttendance(attendanceId, appointmentId) {
       select: attendanceDetailSelect,
     });
 
-    const totalAmount = calculateAttendanceTotal(attendance);
+    const totalAmount = calculateAttendanceTotals(attendance).grandTotalCents / 100;
 
     await tx.attendance.update({
       where: { id: attendanceId },
@@ -278,7 +347,7 @@ export async function finishAttendanceWithPayment(attendanceId, appointmentId, p
       select: attendanceDetailSelect,
     });
 
-    const totalAmount = calculateAttendanceTotal(attendance);
+    const totalAmount = calculateAttendanceTotals(attendance).grandTotalCents / 100;
 
     await tx.attendance.update({
       where: { id: attendanceId },
