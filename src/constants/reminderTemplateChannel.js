@@ -1,0 +1,9 @@
+export const REMINDER_TEMPLATE_CHANNELS = Object.freeze({
+  EMAIL: "EMAIL",
+  IN_APP: "IN_APP",
+  WHATSAPP: "WHATSAPP",
+});
+
+export const REMINDER_TEMPLATE_CHANNEL_VALUES = Object.values(
+  REMINDER_TEMPLATE_CHANNELS,
+);

@@ -1,0 +1,417 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────────────────────────
+// Enums
+// ──────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  PROFESSIONAL
+  CLIENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  IN_ATTENDANCE
+  FINISHED
+  CANCELED
+  NO_SHOW
+}
+
+enum AttendanceStatus {
+  OPEN
+  FINISHED
+  CANCELED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  CANCELED
+}
+
+enum PaymentMethod {
+  PIX
+  CASH
+  CREDIT_CARD
+  DEBIT_CARD
+  OTHER
+}
+
+enum ReminderChannel {
+  IN_APP
+  EMAIL
+  WHATSAPP
+}
+
+enum ReminderStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  CANCELED
+}
+
+enum ReminderTemplateType {
+  APPOINTMENT_REMINDER
+}
+
+enum ReminderTemplateChannel {
+  EMAIL
+  IN_APP
+  WHATSAPP
+}
+
+// ──────────────────────────────────────────
+// Models
+// ──────────────────────────────────────────
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  role         UserRole
+  status       UserStatus @default(ACTIVE)
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  professional  Professional?
+  client        Client?
+  notifications Notification[]
+
+  @@index([email])
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+model Client {
+  id        String     @id @default(cuid())
+  userId    String?    @unique
+  name      String
+  phone     String?
+  email     String?
+  birthDate DateTime?
+  notes     String?
+  status    UserStatus @default(ACTIVE)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  deletedAt DateTime?
+
+  user         User?         @relation(fields: [userId], references: [id])
+  appointments Appointment[]
+  attendances  Attendance[]
+
+  @@index([name])
+  @@index([phone])
+  @@index([birthDate])
+  @@index([status])
+  @@map("clients")
+}
+
+model Professional {
+  id                        String     @id @default(cuid())
+  userId                    String?    @unique
+  name                      String
+  phone                     String?
+  specialty                 String?
+  appointmentIntervalMinutes Int?
+  status                    UserStatus @default(ACTIVE)
+  createdAt                 DateTime   @default(now())
+  updatedAt                 DateTime   @updatedAt
+  deletedAt                 DateTime?
+
+  user         User?         @relation(fields: [userId], references: [id])
+  appointments Appointment[]
+  attendances  Attendance[]
+  schedules    ProfessionalSchedule[]
+  scheduleBlocks ScheduleBlock[]
+  recurringBlocks ProfessionalRecurringBlock[]
+
+  @@index([name])
+  @@index([status])
+  @@map("professionals")
+}
+
+model ProfessionalSchedule {
+  id             String   @id @default(cuid())
+  professionalId String
+  weekday        Int
+  openTime       String
+  closeTime      String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+
+  professional Professional @relation(fields: [professionalId], references: [id])
+
+  @@index([professionalId])
+  @@index([weekday])
+  @@index([isActive])
+  @@index([deletedAt])
+  @@index([professionalId, weekday])
+  @@map("professional_schedules")
+}
+
+model ScheduleBlock {
+  id             String   @id @default(cuid())
+  professionalId String
+  title          String
+  reason         String?
+  startAt        DateTime
+  endAt          DateTime
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+
+  professional Professional @relation(fields: [professionalId], references: [id])
+
+  @@index([professionalId])
+  @@index([startAt])
+  @@index([endAt])
+  @@index([isActive])
+  @@index([deletedAt])
+  @@index([professionalId, startAt])
+  @@index([professionalId, startAt, endAt])
+  @@map("schedule_blocks")
+}
+
+model Service {
+  id              String     @id @default(cuid())
+  name            String
+  description     String?
+  price           Decimal    @db.Decimal(10, 2)
+  durationMinutes Int
+  status          UserStatus @default(ACTIVE)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
+
+  appointments    Appointment[]
+  attendanceItems AttendanceItem[]
+
+  @@index([name])
+  @@index([status])
+  @@index([price])
+  @@map("services")
+}
+
+model Appointment {
+  id             String            @id @default(cuid())
+  clientId       String
+  professionalId String
+  serviceId      String
+  startAt        DateTime
+  endAt          DateTime
+  status         AppointmentStatus @default(SCHEDULED)
+  notes          String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  deletedAt      DateTime?
+
+  client       Client       @relation(fields: [clientId], references: [id])
+  professional Professional @relation(fields: [professionalId], references: [id])
+  service      Service      @relation(fields: [serviceId], references: [id])
+  attendance   Attendance?
+  reminders    AppointmentReminder[]
+
+  @@index([clientId])
+  @@index([professionalId])
+  @@index([serviceId])
+  @@index([status])
+  @@index([startAt])
+  @@index([endAt])
+  @@index([professionalId, startAt])
+  @@index([professionalId, status, startAt])
+  @@index([clientId, startAt])
+  @@map("appointments")
+}
+
+model AppointmentReminder {
+  id             String          @id @default(cuid())
+  appointmentId  String
+  channel        ReminderChannel @default(IN_APP)
+  scheduledAt    DateTime
+  status         ReminderStatus  @default(PENDING)
+  sentAt         DateTime?
+  attempts       Int             @default(0)
+  maxAttempts    Int             @default(3)
+  lastError      String?
+  idempotencyKey String          @unique
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledAt])
+  @@index([appointmentId])
+  @@index([channel])
+  @@map("appointment_reminders")
+}
+
+model ReminderTemplate {
+  id        String                  @id @default(cuid())
+  type      ReminderTemplateType
+  channel   ReminderTemplateChannel
+  name      String
+  subject   String?
+  bodyText  String
+  bodyHtml  String?
+  isActive  Boolean                 @default(false)
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+
+  @@index([type, channel])
+  @@index([type, channel, isActive])
+  @@map("reminder_templates")
+}
+
+model Attendance {
+  id             String           @id @default(cuid())
+  appointmentId  String           @unique
+  clientId       String
+  professionalId String
+  startedAt      DateTime
+  finishedAt     DateTime?
+  status         AttendanceStatus @default(OPEN)
+  notes          String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  appointment  Appointment      @relation(fields: [appointmentId], references: [id])
+  client       Client           @relation(fields: [clientId], references: [id])
+  professional Professional     @relation(fields: [professionalId], references: [id])
+  items        AttendanceItem[]
+  payment      Payment?
+
+  @@index([clientId])
+  @@index([professionalId])
+  @@index([status])
+  @@map("attendances")
+}
+
+model AttendanceItem {
+  id           String   @id @default(cuid())
+  attendanceId String
+  serviceId    String
+  description  String?
+  quantity     Int      @default(1)
+  unitPrice    Decimal  @db.Decimal(10, 2)
+  total        Decimal  @db.Decimal(10, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  attendance Attendance @relation(fields: [attendanceId], references: [id])
+  service    Service    @relation(fields: [serviceId], references: [id])
+
+  @@index([attendanceId])
+  @@index([serviceId])
+  @@map("attendance_items")
+}
+
+model Payment {
+  id                    String        @id @default(cuid())
+  attendanceId          String        @unique
+  amount                Decimal       @db.Decimal(10, 2)
+  discount              Decimal       @db.Decimal(10, 2) @default(0)
+  total                 Decimal       @db.Decimal(10, 2)
+  paymentMethod         PaymentMethod?
+  paymentMethodId       String?
+  status                PaymentStatus @default(PENDING)
+  paidAt                DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  attendance            Attendance            @relation(fields: [attendanceId], references: [id])
+  paymentMethodConfig   PaymentMethodConfig?  @relation(fields: [paymentMethodId], references: [id])
+
+  @@index([status])
+  @@index([paymentMethod])
+  @@index([paymentMethodId])
+  @@index([paidAt])
+  @@map("payments")
+}
+
+model PaymentMethodConfig {
+  id           String    @id @default(cuid())
+  code         String    @unique
+  name         String
+  description  String?
+  isActive     Boolean   @default(true)
+  displayOrder Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  payments Payment[]
+
+  @@index([isActive])
+  @@index([displayOrder])
+  @@index([isActive, displayOrder])
+  @@map("payment_methods")
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String
+  readAt    DateTime?
+  metadata  Json?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([readAt])
+  @@map("notifications")
+}
+
+model ProfessionalRecurringBlock {
+  id             String   @id @default(cuid())
+  professionalId String
+  dayOfWeek      Int
+  startTime      String
+  endTime        String
+  reason         String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([professionalId])
+  @@index([professionalId, dayOfWeek])
+  @@index([professionalId, isActive])
+  @@map("professional_recurring_blocks")
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
+  @@map("system_settings")
+}

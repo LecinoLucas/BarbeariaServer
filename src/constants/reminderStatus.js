@@ -1,0 +1,9 @@
+export const REMINDER_STATUSES = Object.freeze({
+  PENDING: "PENDING",
+  PROCESSING: "PROCESSING",
+  SENT: "SENT",
+  FAILED: "FAILED",
+  CANCELED: "CANCELED",
+});
+
+export const REMINDER_STATUS_VALUES = Object.values(REMINDER_STATUSES);
