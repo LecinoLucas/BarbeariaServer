@@ -1,20 +1,26 @@
 import { successResponse } from "../../utils/response.js";
 import {
   createClient,
+  createClientPortalAccess,
   deleteClient,
   getClientBirthdays,
   getClientById,
   getTopActiveClients,
   listClients,
+  resetClientPortalPassword,
   updateClient,
+  updateClientPortalAccessStatus,
   updateClientStatus,
 } from "./client.service.js";
 import {
   validateBirthdaysQuery,
+  validateCreateClientPortalAccess,
   validateCreateClient,
   validateListClientsQuery,
+  validateResetClientPortalPassword,
   validateTopActiveClientsQuery,
   validateUpdateClient,
+  validateUpdateClientPortalAccessStatus,
   validateUpdateClientStatus,
 } from "./client.validator.js";
 
@@ -68,6 +74,44 @@ export async function updateClientStatusHandler(req, res, next) {
     const client = await updateClientStatus(req.params.id, data);
 
     return successResponse(res, client, "Status do cliente atualizado com sucesso.");
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function createClientPortalAccessHandler(req, res, next) {
+  try {
+    const data = validateCreateClientPortalAccess(req.body);
+    const client = await createClientPortalAccess(req.params.id, data);
+
+    return successResponse(
+      res,
+      { client },
+      "Acesso ao Portal do Cliente criado com sucesso.",
+      201,
+    );
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function resetClientPortalPasswordHandler(req, res, next) {
+  try {
+    const data = validateResetClientPortalPassword(req.body);
+    const client = await resetClientPortalPassword(req.params.id, data);
+
+    return successResponse(res, { client }, "Senha redefinida com sucesso.");
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function updateClientPortalAccessStatusHandler(req, res, next) {
+  try {
+    const data = validateUpdateClientPortalAccessStatus(req.body);
+    const client = await updateClientPortalAccessStatus(req.params.id, data);
+
+    return successResponse(res, { client }, "Acesso ao portal atualizado com sucesso.");
   } catch (error) {
     return next(error);
   }

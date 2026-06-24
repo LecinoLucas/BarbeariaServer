@@ -100,6 +100,30 @@ const updateClientStatusSchema = z.object({
   status: statusSchema,
 });
 
+const portalAccessEmailSchema = z
+  .string({ required_error: "Email de login é obrigatório." })
+  .trim()
+  .min(1, "Email de login é obrigatório.")
+  .email("Email inválido.")
+  .transform((value) => value.toLowerCase());
+
+const portalAccessPasswordSchema = z
+  .string({ required_error: "Senha é obrigatória." })
+  .min(6, "A senha deve ter pelo menos 6 caracteres.");
+
+const createClientPortalAccessSchema = z.object({
+  email: portalAccessEmailSchema,
+  password: portalAccessPasswordSchema,
+});
+
+const resetClientPortalPasswordSchema = z.object({
+  password: portalAccessPasswordSchema,
+});
+
+const updateClientPortalAccessStatusSchema = z.object({
+  status: statusSchema,
+});
+
 const listClientsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(10),
@@ -136,6 +160,18 @@ export function validateUpdateClient(payload) {
 
 export function validateUpdateClientStatus(payload) {
   return parseOrThrow(updateClientStatusSchema, payload);
+}
+
+export function validateCreateClientPortalAccess(payload) {
+  return parseOrThrow(createClientPortalAccessSchema, payload);
+}
+
+export function validateResetClientPortalPassword(payload) {
+  return parseOrThrow(resetClientPortalPasswordSchema, payload);
+}
+
+export function validateUpdateClientPortalAccessStatus(payload) {
+  return parseOrThrow(updateClientPortalAccessStatusSchema, payload);
 }
 
 export function validateListClientsQuery(payload) {

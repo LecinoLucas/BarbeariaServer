@@ -2,6 +2,13 @@ import { Prisma } from "@prisma/client";
 
 import prisma from "../../database/prisma.js";
 
+const safePortalAccessUserSelect = {
+  id: true,
+  email: true,
+  role: true,
+  status: true,
+};
+
 const safeClientSelect = {
   id: true,
   userId: true,
@@ -238,6 +245,75 @@ export function update(id, data) {
     where: { id },
     data,
     select: safeClientSelect,
+  });
+}
+
+export function listPortalAccessUsersByIds(ids) {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return [];
+  }
+
+  return prisma.user.findMany({
+    where: {
+      id: {
+        in: ids,
+      },
+      deletedAt: null,
+    },
+    select: safePortalAccessUserSelect,
+  });
+}
+
+export function findPortalAccessUserById(userId) {
+  if (!userId) {
+    return null;
+  }
+
+  return prisma.user.findFirst({
+    where: {
+      id: userId,
+      deletedAt: null,
+    },
+    select: safePortalAccessUserSelect,
+  });
+}
+
+export function createPortalAccessForClient(clientId, userData) {
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: userData,
+      select: safePortalAccessUserSelect,
+    });
+
+    const client = await tx.client.update({
+      where: { id: clientId },
+      data: {
+        userId: user.id,
+      },
+      select: safeClientSelect,
+    });
+
+    return { client, user };
+  });
+}
+
+export function updatePortalAccessPassword(userId, passwordHash) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: {
+      passwordHash,
+    },
+    select: safePortalAccessUserSelect,
+  });
+}
+
+export function updatePortalAccessStatus(userId, status) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: {
+      status,
+    },
+    select: safePortalAccessUserSelect,
   });
 }
 
