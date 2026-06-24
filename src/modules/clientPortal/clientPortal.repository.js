@@ -397,6 +397,74 @@ export function countAppointments(clientId, filters) {
   });
 }
 
+export function listUpcomingClientAppointments(clientId, now, limit = 100) {
+  return prisma.appointment.findMany({
+    where: {
+      clientId,
+      deletedAt: null,
+      professional: {
+        deletedAt: null,
+      },
+      service: {
+        deletedAt: null,
+      },
+      OR: [
+        {
+          status: "IN_ATTENDANCE",
+        },
+        {
+          status: {
+            in: ["SCHEDULED", "CONFIRMED"],
+          },
+          startAt: {
+            gte: now,
+          },
+        },
+      ],
+    },
+    orderBy: {
+      startAt: "asc",
+    },
+    take: limit,
+    select: appointmentSelect,
+  });
+}
+
+export function listHistoricalClientAppointments(clientId, now, limit = 20) {
+  return prisma.appointment.findMany({
+    where: {
+      clientId,
+      deletedAt: null,
+      professional: {
+        deletedAt: null,
+      },
+      service: {
+        deletedAt: null,
+      },
+      OR: [
+        {
+          status: {
+            in: ["CANCELED", "FINISHED", "NO_SHOW"],
+          },
+        },
+        {
+          status: {
+            in: ["SCHEDULED", "CONFIRMED"],
+          },
+          startAt: {
+            lt: now,
+          },
+        },
+      ],
+    },
+    orderBy: {
+      startAt: "desc",
+    },
+    take: limit,
+    select: appointmentSelect,
+  });
+}
+
 export function listAttendances(clientId, filters) {
   return prisma.attendance.findMany({
     where: buildAttendancesWhere(clientId, filters),
@@ -420,6 +488,24 @@ export function countAllAppointments(clientId) {
     where: {
       clientId,
       deletedAt: null,
+      professional: {
+        deletedAt: null,
+      },
+      service: {
+        deletedAt: null,
+      },
+    },
+  });
+}
+
+export function countActiveClientAppointments(clientId) {
+  return prisma.appointment.count({
+    where: {
+      clientId,
+      deletedAt: null,
+      status: {
+        in: ["SCHEDULED", "CONFIRMED"],
+      },
       professional: {
         deletedAt: null,
       },

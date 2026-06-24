@@ -188,8 +188,15 @@ export function listMonthSummaryRows(filters) {
     where: buildWhere(filters),
     orderBy: { startAt: "asc" },
     select: {
+      id: true,
       startAt: true,
       status: true,
+      client: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
     },
   });
 }

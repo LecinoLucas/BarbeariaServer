@@ -6,6 +6,7 @@ import { authorizeRoles } from "../../middlewares/role.middleware.js";
 import {
   cancelClientAppointmentHandler,
   createClientAppointmentHandler,
+  getClientPortalConfigHandler,
   getClientPortalAvailabilityHandler,
   getClientDashboardHandler,
   getClientProfileHandler,
@@ -16,10 +17,14 @@ import {
   rescheduleClientAppointmentHandler,
   updateClientProfileHandler,
 } from "./clientPortal.controller.js";
+import { ensureClientPortalEnabled } from "./clientPortalAccess.middleware.js";
 
 const router = Router();
 
+router.get("/config", getClientPortalConfigHandler);
+
 router.use(authenticate, authorizeRoles(ROLES.CLIENT));
+router.use(ensureClientPortalEnabled);
 
 router.get("/dashboard", getClientDashboardHandler);
 router.get("/services", listClientPortalServicesHandler);

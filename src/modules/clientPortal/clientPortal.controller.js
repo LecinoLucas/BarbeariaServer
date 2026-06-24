@@ -2,6 +2,7 @@ import { successResponse } from "../../utils/response.js";
 import {
   cancelOwnAppointment,
   createOwnClientAppointment,
+  getClientPortalConfig,
   getClientPortalAvailability,
   getClientDashboard,
   getClientProfile,
@@ -25,6 +26,15 @@ export async function getClientDashboardHandler(req, res, next) {
   try {
     const data = await getClientDashboard(req.user.id);
     return successResponse(res, data, "Dashboard do cliente carregado com sucesso.");
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function getClientPortalConfigHandler(req, res, next) {
+  try {
+    const data = await getClientPortalConfig();
+    return successResponse(res, data, "Configurações do portal carregadas com sucesso.");
   } catch (error) {
     return next(error);
   }

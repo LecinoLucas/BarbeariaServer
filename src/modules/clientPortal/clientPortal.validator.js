@@ -53,8 +53,28 @@ const optionalEmailSchema = z.preprocess(
 
 const optionalNotesSchema = z.preprocess(
   normalizeOptionalString,
-  z.union([z.string().trim(), z.null()]).optional(),
+  z
+    .union([z.string().trim().max(500, "Observação muito longa."), z.null()])
+    .optional(),
 ).transform((value) => value ?? null);
+
+const clientPortalNotesSchema = z.preprocess(
+  normalizeOptionalString,
+  z
+    .union([z.string().trim().max(500, "Observação muito longa."), z.null()])
+    .optional(),
+).superRefine((value, ctx) => {
+  if (value === undefined || value === null || value === "") {
+    return;
+  }
+
+  if (/<[^>]+>/.test(value) || /<\s*script\b|javascript:/i.test(value)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Observação não pode conter HTML ou script.",
+    });
+  }
+}).transform((value) => value ?? null);
 
 const optionalBirthDateSchema = z.preprocess(
   normalizeOptionalString,
@@ -110,7 +130,7 @@ const updateClientProfileSchema = z.object({
   phone: phoneSchema,
   email: optionalEmailSchema,
   birthDate: optionalBirthDateSchema,
-  notes: optionalNotesSchema,
+  notes: clientPortalNotesSchema,
 });
 
 const rescheduleClientAppointmentSchema = z.object({

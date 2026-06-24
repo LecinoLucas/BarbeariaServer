@@ -5,6 +5,7 @@ import { BadRequestError } from "../../errors/BadRequestError.js";
 import { ConflictError } from "../../errors/ConflictError.js";
 import { ForbiddenError } from "../../errors/ForbiddenError.js";
 import { NotFoundError } from "../../errors/NotFoundError.js";
+import { ServiceUnavailableError } from "../../errors/ServiceUnavailableError.js";
 import {
   emitNotificationToUser,
   emitToAdmins,
@@ -31,8 +32,10 @@ import {
   createReminderForAppointment,
   recalculateReminderForAppointment,
 } from "../appointmentReminders/appointmentReminder.service.js";
+import { getClientPortalSettings as getClientPortalSettingsRuntime } from "../settings/settings.service.js";
 import {
   countAllAppointments,
+  countActiveClientAppointments,
   countAllFinishedAttendances,
   countAppointments,
   countAttendances,
@@ -51,11 +54,13 @@ import {
   getLastAttendance,
   getNextAppointment,
   getSettingByKey,
+  listHistoricalClientAppointments,
   listAppointments,
   listActiveClientPortalProfessionals,
   listActiveClientPortalServices,
   listAttendances,
   listRecentAttendances,
+  listUpcomingClientAppointments,
   updateAppointmentDate,
   updateAppointmentStatus,
   updateClientProfile,
@@ -67,11 +72,14 @@ const DUPLICATE_PHONE_MESSAGE = "Já existe um cliente não deletado com este te
 const DUPLICATE_EMAIL_MESSAGE = "Já existe um cliente não deletado com este email.";
 const SCHEDULE_BLOCK_CONFLICT_MESSAGE = "Horário bloqueado para o profissional selecionado.";
 const APPOINTMENT_CONFLICT_MESSAGE = "Conflito de horário para o profissional selecionado.";
+const BOOKING_ADVANCE_MESSAGE = "Este horário precisa ser agendado com mais antecedência.";
+const BOOKING_MAX_DAYS_MESSAGE =
+  "Escolha uma data dentro do período permitido para agendamento online.";
+const BOOKING_ACTIVE_LIMIT_MESSAGE =
+  "Você já possui o limite de agendamentos ativos permitido.";
 
 const DEFAULT_OPEN_TIME = "09:00";
 const DEFAULT_CLOSE_TIME = "18:00";
-const DEFAULT_ALLOW_CLIENT_CANCEL = true;
-const DEFAULT_ALLOW_CLIENT_RESCHEDULE = true;
 const CLIENT_PORTAL_STATUS_LABELS = {
   [APPOINTMENT_STATUS.SCHEDULED]: "Agendado",
   [APPOINTMENT_STATUS.CONFIRMED]: "Confirmado",
@@ -110,6 +118,12 @@ function timeToMinutes(time) {
 
 function buildDateTime(date, time) {
   return new Date(`${date}T${time}:00.000Z`);
+}
+
+function addDaysToDateKey(dateKey, days) {
+  const baseDate = new Date(`${dateKey}T00:00:00.000Z`);
+  baseDate.setUTCDate(baseDate.getUTCDate() + days);
+  return baseDate.toISOString().slice(0, 10);
 }
 
 function getWeekdayFromDate(date) {
@@ -198,18 +212,9 @@ async function ensureEmailAvailable(email, ignoringId) {
   return normalizedEmail;
 }
 
-async function ensureClientCancelAllowed() {
-  const setting = await getSettingByKey("allow_client_cancel");
-  const isAllowed = setting ? setting.value === "true" : DEFAULT_ALLOW_CLIENT_CANCEL;
-
-  if (!isAllowed) {
-    throw new ForbiddenError("Cancelamento pelo cliente está desabilitado.");
-  }
-}
-
 async function ensureClientRescheduleAllowed() {
   const setting = await getSettingByKey("allow_client_reschedule");
-  const isAllowed = setting ? setting.value === "true" : DEFAULT_ALLOW_CLIENT_RESCHEDULE;
+  const isAllowed = setting ? setting.value === "true" : true;
 
   if (!isAllowed) {
     throw new ForbiddenError("Reagendamento pelo cliente está desabilitado.");
@@ -227,19 +232,37 @@ function ensureAppointentCanBeManagedByClient(appointment) {
   }
 }
 
-function canClientCancelAppointment(appointment, now = new Date()) {
+function canClientCancelAppointment(appointment, config, now = new Date()) {
+  if (!config.cancelEnabled) {
+    return false;
+  }
+
   if (!appointment?.startAt || appointment.startAt <= now) {
     return false;
   }
 
-  return (
+  const matchesStatus =
     appointment.status === APPOINTMENT_STATUS.SCHEDULED ||
-    appointment.status === APPOINTMENT_STATUS.CONFIRMED
-  );
+    appointment.status === APPOINTMENT_STATUS.CONFIRMED;
+
+  if (!matchesStatus) {
+    return false;
+  }
+
+  if (config.cancelMinHours <= 0) {
+    return true;
+  }
+
+  const minMilliseconds = config.cancelMinHours * 60 * 60 * 1000;
+  return appointment.startAt.getTime() - now.getTime() >= minMilliseconds;
 }
 
-function ensureAppointmentCanBeCanceledByClient(appointment) {
-  if (!canClientCancelAppointment(appointment)) {
+function ensureAppointmentCanBeCanceledByClient(appointment, config) {
+  if (!config.cancelEnabled) {
+    throw new ServiceUnavailableError("O cancelamento online está temporariamente indisponível.");
+  }
+
+  if (!canClientCancelAppointment(appointment, config)) {
     throw new BadRequestError("Este agendamento não pode ser cancelado.");
   }
 }
@@ -362,21 +385,88 @@ function formatCreatedAppointment(appointment) {
   };
 }
 
-function formatClientPortalAppointment(appointment, now = new Date()) {
+function formatCreatedAppointmentWithConfig(appointment, config) {
+  return {
+    ...formatCreatedAppointment(appointment),
+    professionalName: config.showProfessional ? appointment.professional?.name ?? null : null,
+  };
+}
+
+function formatClientPortalAppointment(appointment, config, now = new Date()) {
   return {
     id: appointment.id,
     date: getBusinessDateKeyFromUtc(appointment.startAt),
     time: getBusinessTimeFromUtc(appointment.startAt),
     status: appointment.status,
     statusLabel: getAppointmentStatusLabel(appointment.status),
-    professionalName: appointment.professional?.name ?? null,
+    professionalName: config.showProfessional ? appointment.professional?.name ?? null : null,
     services: appointment.service?.name ? [appointment.service.name] : [],
-    canCancel: canClientCancelAppointment(appointment, now),
+    canCancel: canClientCancelAppointment(appointment, config, now),
   };
+}
+
+function formatDashboardAttendance(attendance, config) {
+  const formatted = formatAttendanceForDashboard(attendance);
+  return {
+    ...formatted,
+    professionalName: config.showProfessional ? formatted.professionalName : null,
+  };
+}
+
+function formatDashboardAppointment(appointment, config) {
+  const formatted = formatAppointmentForDashboard(appointment);
+  return {
+    ...formatted,
+    professionalName: config.showProfessional ? formatted.professionalName : null,
+  };
+}
+
+function ensureDateWithinBookingWindow(date, config, now = new Date()) {
+  if (config.bookingMaxDaysAhead < 0) {
+    return;
+  }
+
+  const todayKey = getBusinessDateKeyFromUtc(now);
+  const maxDateKey = addDaysToDateKey(todayKey, config.bookingMaxDaysAhead);
+
+  if (date < todayKey || date > maxDateKey) {
+    throw new BadRequestError(BOOKING_MAX_DAYS_MESSAGE);
+  }
+}
+
+function ensureBookingAdvance(startAt, config, now = new Date()) {
+  if (config.bookingMinHoursAdvance <= 0) {
+    return;
+  }
+
+  const minMilliseconds = config.bookingMinHoursAdvance * 60 * 60 * 1000;
+
+  if (startAt.getTime() - now.getTime() < minMilliseconds) {
+    throw new BadRequestError(BOOKING_ADVANCE_MESSAGE);
+  }
+}
+
+function normalizeClientPortalNotes(notes, config) {
+  if (!config.notesEnabled) {
+    return null;
+  }
+
+  const normalized = typeof notes === "string" ? notes.trim() : "";
+
+  if (config.notesRequired && normalized.length === 0) {
+    throw new BadRequestError("Preencha a observação para continuar.");
+  }
+
+  return normalized.length > 0 ? normalized : null;
+}
+
+export async function getClientPortalConfig() {
+  return getClientPortalSettingsRuntime();
 }
 
 export async function getClientDashboard(userId) {
   const client = await ensureClientProfile(userId);
+  const config = await getClientPortalSettingsRuntime();
   const now = new Date();
   const { startOfMonth, endOfMonth } = getDateRanges(now);
 
@@ -388,12 +478,14 @@ export async function getClientDashboard(userId) {
     completedAppointments,
     recentHistory,
   ] = await Promise.all([
-    getNextAppointment(client.id, now),
-    getLastAttendance(client.id),
+    config.dashboardShowNextAppointment ? getNextAppointment(client.id, now) : Promise.resolve(null),
+    config.dashboardShowLastVisit ? getLastAttendance(client.id) : Promise.resolve(null),
     countFinishedAttendancesByPeriod(client.id, startOfMonth, endOfMonth),
     countAllAppointments(client.id),
     countAllFinishedAttendances(client.id),
-    listRecentAttendances(client.id, 5),
+    config.dashboardShowRecentHistory
+      ? listRecentAttendances(client.id, config.dashboardHistoryLimit)
+      : Promise.resolve([]),
   ]);
 
   return {
@@ -402,14 +494,17 @@ export async function getClientDashboard(userId) {
       completedAppointments,
       appointmentsThisMonth,
     },
-    lastVisit: lastAttendance ? formatAttendanceForDashboard(lastAttendance) : null,
-    nextAppointment: nextAppointment ? formatAppointmentForDashboard(nextAppointment) : null,
-    recentHistory: recentHistory.slice(0, 5).map(formatAttendanceForDashboard),
+    lastVisit: lastAttendance ? formatDashboardAttendance(lastAttendance, config) : null,
+    nextAppointment: nextAppointment ? formatDashboardAppointment(nextAppointment, config) : null,
+    recentHistory: recentHistory
+      .slice(0, config.dashboardHistoryLimit)
+      .map((item) => formatDashboardAttendance(item, config)),
   };
 }
 
 export async function listClientPortalServices(userId) {
   await ensureClientProfile(userId);
+  const config = await getClientPortalSettingsRuntime();
 
   const items = await listActiveClientPortalServices();
 
@@ -418,8 +513,8 @@ export async function listClientPortalServices(userId) {
       id: item.id,
       name: item.name,
       description: item.description ?? null,
-      durationMinutes: item.durationMinutes,
-      priceCents: toPriceCents(item.price),
+      durationMinutes: config.showDuration ? item.durationMinutes : null,
+      priceCents: config.showPrices ? toPriceCents(item.price) : null,
     })),
   };
 }
@@ -441,14 +536,26 @@ export async function listClientPortalProfessionals(userId) {
 
 export async function getClientPortalAvailability(query, userId) {
   await ensureClientProfile(userId);
+  const config = await getClientPortalSettingsRuntime();
+  const now = new Date();
+
+  ensureDateWithinBookingWindow(query.date, config, now);
 
   const result = await getAppointmentAvailability(query);
+  const filteredSlots = result.slots.filter((slot) => {
+    if (config.bookingMinHoursAdvance <= 0) {
+      return true;
+    }
+
+    const minMilliseconds = config.bookingMinHoursAdvance * 60 * 60 * 1000;
+    return new Date(slot.startAt).getTime() - now.getTime() >= minMilliseconds;
+  });
 
   return {
     date: result.date,
     professionalId: result.professionalId,
     serviceId: result.serviceId,
-    slots: result.slots.map((slot) => ({
+    slots: filteredSlots.map((slot) => ({
       time: getBusinessTimeFromUtc(new Date(slot.startAt)),
       available: true,
     })),
@@ -457,11 +564,19 @@ export async function getClientPortalAvailability(query, userId) {
 
 export async function createOwnClientAppointment(payload, userId) {
   const client = await ensureClientProfile(userId);
+  const config = await getClientPortalSettingsRuntime();
+
+  if (!config.bookingEnabled) {
+    throw new ServiceUnavailableError("O agendamento online está temporariamente indisponível.");
+  }
+
   const service = await findServiceById(payload.serviceId);
 
   if (!service || service.status !== SERVICE_STATUS.ACTIVE) {
     throw new BadRequestError("Serviço não encontrado ou inativo.");
   }
+
+  ensureDateWithinBookingWindow(payload.date, config);
 
   const existingAppointment = await findActiveClientServiceAppointment(client.id, payload.serviceId);
 
@@ -469,11 +584,21 @@ export async function createOwnClientAppointment(payload, userId) {
     throw new ConflictError("Você já possui um agendamento ativo para este serviço.");
   }
 
+  const activeAppointmentsCount = await countActiveClientAppointments(client.id);
+
+  if (activeAppointmentsCount >= config.maxActiveAppointments) {
+    throw new ConflictError(BOOKING_ACTIVE_LIMIT_MESSAGE);
+  }
+
   const requestedStartAt = combineBusinessDateAndTimeToUtc(payload.date, payload.time);
 
   if (requestedStartAt <= new Date()) {
     throw new BadRequestError("Não é possível criar agendamento em horário passado.");
   }
+
+  ensureBookingAdvance(requestedStartAt, config);
+
+  const normalizedNotes = normalizeClientPortalNotes(payload.notes, config);
 
   const { startUtc, endUtc } = await assertAppointmentSlotAvailability({
     professionalId: payload.professionalId,
@@ -489,7 +614,7 @@ export async function createOwnClientAppointment(payload, userId) {
     startAt: startUtc,
     endAt: endUtc,
     status: APPOINTMENT_STATUS.SCHEDULED,
-    notes: payload.notes,
+    notes: normalizedNotes,
   });
 
   await createReminderForAppointment(appointment);
@@ -506,20 +631,37 @@ export async function createOwnClientAppointment(payload, userId) {
   emitToAdmins(SOCKET_EVENTS.APPOINTMENT_CREATED, toAppointmentEventPayload(appointment));
 
   return {
-    appointment: formatCreatedAppointment(appointment),
+    appointment: formatCreatedAppointmentWithConfig(appointment, config),
   };
 }
 
 export async function listClientAppointments(query, userId) {
   const client = await ensureClientProfile(userId);
+  const config = await getClientPortalSettingsRuntime();
   const now = new Date();
-  const [items, total] = await Promise.all([
-    listAppointments(client.id, query),
-    countAppointments(client.id, query),
-  ]);
+  let items = [];
+  let total = 0;
+
+  if (query.status) {
+    [items, total] = await Promise.all([
+      listAppointments(client.id, query),
+      countAppointments(client.id, query),
+    ]);
+  } else {
+    const upcomingLimit = Math.max(query.limit, config.appointmentsHistoryLimit, 20);
+    const [upcomingItems, historicalItems] = await Promise.all([
+      listUpcomingClientAppointments(client.id, now, upcomingLimit),
+      config.appointmentsShowHistory
+        ? listHistoricalClientAppointments(client.id, now, config.appointmentsHistoryLimit)
+        : Promise.resolve([]),
+    ]);
+
+    items = [...upcomingItems, ...historicalItems];
+    total = items.length;
+  }
 
   return {
-    items: items.map((item) => formatClientPortalAppointment(item, now)),
+    items: items.map((item) => formatClientPortalAppointment(item, config, now)),
     meta: {
       page: query.page,
       limit: query.limit,
@@ -567,10 +709,10 @@ export async function updateOwnClientProfile(payload, userId) {
 
 export async function cancelOwnAppointment(appointmentId, userId) {
   const client = await ensureClientProfile(userId);
-  await ensureClientCancelAllowed();
+  const config = await getClientPortalSettingsRuntime();
 
   const appointment = await ensureOwnAppointment(appointmentId, client.id);
-  ensureAppointmentCanBeCanceledByClient(appointment);
+  ensureAppointmentCanBeCanceledByClient(appointment, config);
 
   const updatedAppointment = await updateAppointmentStatus(
     appointment.id,

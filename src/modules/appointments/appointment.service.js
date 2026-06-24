@@ -144,10 +144,18 @@ export function summarizeAppointmentsByBusinessDay(rows) {
 
   rows.forEach((row) => {
     const day = getBusinessDateKeyFromUtc(row.startAt);
-    const current = summary.get(day) ?? { date: day, total: 0, byStatus: {} };
+    const current = summary.get(day) ?? { date: day, total: 0, byStatus: {}, appointments: [] };
 
     current.total += 1;
     current.byStatus[row.status] = (current.byStatus[row.status] || 0) + 1;
+    
+    current.appointments.push({
+      id: row.id,
+      startAt: row.startAt,
+      time: getBusinessTimeFromUtc(row.startAt),
+      status: row.status,
+      clientName: row.client?.name || "Cliente",
+    });
 
     summary.set(day, current);
   });

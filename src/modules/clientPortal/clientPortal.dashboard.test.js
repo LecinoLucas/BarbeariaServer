@@ -6,6 +6,7 @@ import { NotFoundError } from "../../errors/NotFoundError.js";
 import { authorizeRoles } from "../../middlewares/role.middleware.js";
 import prisma from "../../database/prisma.js";
 import { getClientDashboard } from "./clientPortal.service.js";
+import { ensureClientPortalEnabled } from "./clientPortalAccess.middleware.js";
 import clientPortalRoutes from "./clientPortal.routes.js";
 
 // UTC equivalente de 2026-06-23 09:00 America/Sao_Paulo (BRT = UTC-3 → 12:00 UTC)
@@ -68,8 +69,11 @@ function makeAppointment(overrides = {}) {
 
 test("getClientDashboard lança NotFoundError quando userId não tem perfil de cliente", async (t) => {
   const original = prisma.client.findFirst;
+  const origSettings = prisma.systemSetting.findMany;
   t.after(() => { prisma.client.findFirst = original; });
+  t.after(() => { prisma.systemSetting.findMany = origSettings; });
   prisma.client.findFirst = async () => null;
+  prisma.systemSetting.findMany = async () => [];
 
   await assert.rejects(
     () => getClientDashboard("user-sem-cliente"),
@@ -84,6 +88,7 @@ test("getClientDashboard retorna estado vazio com zeros e nulls quando não há 
   const origAttCount = prisma.attendance.count;
   const origApptCount = prisma.appointment.count;
   const origAttFindMany = prisma.attendance.findMany;
+  const origSettings = prisma.systemSetting.findMany;
 
   t.after(() => {
     prisma.client.findFirst = origClient;
@@ -92,6 +97,7 @@ test("getClientDashboard retorna estado vazio com zeros e nulls quando não há 
     prisma.attendance.count = origAttCount;
     prisma.appointment.count = origApptCount;
     prisma.attendance.findMany = origAttFindMany;
+    prisma.systemSetting.findMany = origSettings;
   });
 
   prisma.client.findFirst = async () => ({ id: "client-1", userId: "user-1" });
@@ -100,6 +106,7 @@ test("getClientDashboard retorna estado vazio com zeros e nulls quando não há 
   prisma.attendance.count = async () => 0;
   prisma.appointment.count = async () => 0;
   prisma.attendance.findMany = async () => [];
+  prisma.systemSetting.findMany = async () => [];
 
   const result = await getClientDashboard("user-1");
 
@@ -120,6 +127,7 @@ test("getClientDashboard formata lastVisit com data/hora no fuso America/Sao_Pau
   const origAttCount = prisma.attendance.count;
   const origApptCount = prisma.appointment.count;
   const origAttFindMany = prisma.attendance.findMany;
+  const origSettings = prisma.systemSetting.findMany;
 
   t.after(() => {
     prisma.client.findFirst = origClient;
@@ -128,6 +136,7 @@ test("getClientDashboard formata lastVisit com data/hora no fuso America/Sao_Pau
     prisma.attendance.count = origAttCount;
     prisma.appointment.count = origApptCount;
     prisma.attendance.findMany = origAttFindMany;
+    prisma.systemSetting.findMany = origSettings;
   });
 
   const attendance = makeAttendance();
@@ -138,6 +147,7 @@ test("getClientDashboard formata lastVisit com data/hora no fuso America/Sao_Pau
   prisma.attendance.count = async () => 0;
   prisma.appointment.count = async () => 0;
   prisma.attendance.findMany = async () => [];
+  prisma.systemSetting.findMany = async () => [];
 
   const result = await getClientDashboard("user-1");
 
@@ -157,6 +167,7 @@ test("getClientDashboard formata nextAppointment com data/hora no fuso America/S
   const origAttCount = prisma.attendance.count;
   const origApptCount = prisma.appointment.count;
   const origAttFindMany = prisma.attendance.findMany;
+  const origSettings = prisma.systemSetting.findMany;
 
   t.after(() => {
     prisma.client.findFirst = origClient;
@@ -165,6 +176,7 @@ test("getClientDashboard formata nextAppointment com data/hora no fuso America/S
     prisma.attendance.count = origAttCount;
     prisma.appointment.count = origApptCount;
     prisma.attendance.findMany = origAttFindMany;
+    prisma.systemSetting.findMany = origSettings;
   });
 
   const appt = makeAppointment();
@@ -175,6 +187,7 @@ test("getClientDashboard formata nextAppointment com data/hora no fuso America/S
   prisma.attendance.count = async () => 0;
   prisma.appointment.count = async () => 0;
   prisma.attendance.findMany = async () => [];
+  prisma.systemSetting.findMany = async () => [];
 
   const result = await getClientDashboard("user-1");
 
@@ -192,6 +205,7 @@ test("getClientDashboard reflete appointmentsThisMonth no summary", async (t) =>
   const origAttCount = prisma.attendance.count;
   const origApptCount = prisma.appointment.count;
   const origAttFindMany = prisma.attendance.findMany;
+  const origSettings = prisma.systemSetting.findMany;
 
   let countCallIndex = 0;
 
@@ -202,6 +216,7 @@ test("getClientDashboard reflete appointmentsThisMonth no summary", async (t) =>
     prisma.attendance.count = origAttCount;
     prisma.appointment.count = origApptCount;
     prisma.attendance.findMany = origAttFindMany;
+    prisma.systemSetting.findMany = origSettings;
   });
 
   prisma.client.findFirst = async () => ({ id: "client-1", userId: "user-1" });
@@ -215,6 +230,7 @@ test("getClientDashboard reflete appointmentsThisMonth no summary", async (t) =>
   };
   prisma.appointment.count = async () => 15;
   prisma.attendance.findMany = async () => [];
+  prisma.systemSetting.findMany = async () => [];
 
   const result = await getClientDashboard("user-1");
 
@@ -230,6 +246,7 @@ test("getClientDashboard ignora agendamentos ligados a serviço ou profissional 
   const origAttCount = prisma.attendance.count;
   const origApptCount = prisma.appointment.count;
   const origAttFindMany = prisma.attendance.findMany;
+  const origSettings = prisma.systemSetting.findMany;
   let receivedNextWhere = null;
   let receivedCountWhere = null;
 
@@ -240,6 +257,7 @@ test("getClientDashboard ignora agendamentos ligados a serviço ou profissional 
     prisma.attendance.count = origAttCount;
     prisma.appointment.count = origApptCount;
     prisma.attendance.findMany = origAttFindMany;
+    prisma.systemSetting.findMany = origSettings;
   });
 
   prisma.client.findFirst = async () => ({ id: "client-1", userId: "user-1" });
@@ -254,6 +272,7 @@ test("getClientDashboard ignora agendamentos ligados a serviço ou profissional 
     return 0;
   };
   prisma.attendance.findMany = async () => [];
+  prisma.systemSetting.findMany = async () => [];
 
   await getClientDashboard("user-1");
 
@@ -270,6 +289,7 @@ test("getClientDashboard retorna recentHistory com até 5 registros formatados",
   const origAttCount = prisma.attendance.count;
   const origApptCount = prisma.appointment.count;
   const origAttFindMany = prisma.attendance.findMany;
+  const origSettings = prisma.systemSetting.findMany;
 
   t.after(() => {
     prisma.client.findFirst = origClient;
@@ -278,6 +298,7 @@ test("getClientDashboard retorna recentHistory com até 5 registros formatados",
     prisma.attendance.count = origAttCount;
     prisma.appointment.count = origApptCount;
     prisma.attendance.findMany = origAttFindMany;
+    prisma.systemSetting.findMany = origSettings;
   });
 
   const history = [
@@ -295,6 +316,7 @@ test("getClientDashboard retorna recentHistory com até 5 registros formatados",
   prisma.attendance.count = async () => 0;
   prisma.appointment.count = async () => 0;
   prisma.attendance.findMany = async () => history;
+  prisma.systemSetting.findMany = async () => [];
 
   const result = await getClientDashboard("user-1");
 
@@ -305,13 +327,117 @@ test("getClientDashboard retorna recentHistory com até 5 registros formatados",
   assert.deepEqual(result.recentHistory[0].services, ["Corte Degradê"]);
 });
 
+test("getClientDashboard respeita historyLimit e oculta blocos configurados", async (t) => {
+  const origClient = prisma.client.findFirst;
+  const origApptFirst = prisma.appointment.findFirst;
+  const origAttFirst = prisma.attendance.findFirst;
+  const origAttCount = prisma.attendance.count;
+  const origApptCount = prisma.appointment.count;
+  const origAttFindMany = prisma.attendance.findMany;
+  const origSettings = prisma.systemSetting.findMany;
+
+  t.after(() => {
+    prisma.client.findFirst = origClient;
+    prisma.appointment.findFirst = origApptFirst;
+    prisma.attendance.findFirst = origAttFirst;
+    prisma.attendance.count = origAttCount;
+    prisma.appointment.count = origApptCount;
+    prisma.attendance.findMany = origAttFindMany;
+    prisma.systemSetting.findMany = origSettings;
+  });
+
+  const history = [
+    makeAttendance({ id: "att-1", appointmentId: "appt-1" }),
+    makeAttendance({ id: "att-2", appointmentId: "appt-2" }),
+    makeAttendance({ id: "att-3", appointmentId: "appt-3" }),
+  ];
+
+  prisma.client.findFirst = async () => ({ id: "client-1", userId: "user-1" });
+  prisma.appointment.findFirst = async () => makeAppointment();
+  prisma.attendance.findFirst = async () => makeAttendance();
+  prisma.attendance.count = async () => 0;
+  prisma.appointment.count = async () => 0;
+  prisma.attendance.findMany = async () => history;
+  prisma.systemSetting.findMany = async () => [
+    {
+      id: "s1",
+      key: "client_portal_dashboard_show_last_visit",
+      value: "false",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    {
+      id: "s2",
+      key: "client_portal_dashboard_show_next_appointment",
+      value: "false",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    {
+      id: "s3",
+      key: "client_portal_dashboard_history_limit",
+      value: "2",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  ];
+
+  const result = await getClientDashboard("user-1");
+
+  assert.equal(result.lastVisit, null);
+  assert.equal(result.nextAppointment, null);
+  assert.equal(result.recentHistory.length, 2);
+});
+
+test("getClientDashboard retorna histórico vazio quando showRecentHistory=false", async (t) => {
+  const origClient = prisma.client.findFirst;
+  const origApptFirst = prisma.appointment.findFirst;
+  const origAttFirst = prisma.attendance.findFirst;
+  const origAttCount = prisma.attendance.count;
+  const origApptCount = prisma.appointment.count;
+  const origAttFindMany = prisma.attendance.findMany;
+  const origSettings = prisma.systemSetting.findMany;
+
+  t.after(() => {
+    prisma.client.findFirst = origClient;
+    prisma.appointment.findFirst = origApptFirst;
+    prisma.attendance.findFirst = origAttFirst;
+    prisma.attendance.count = origAttCount;
+    prisma.appointment.count = origApptCount;
+    prisma.attendance.findMany = origAttFindMany;
+    prisma.systemSetting.findMany = origSettings;
+  });
+
+  prisma.client.findFirst = async () => ({ id: "client-1", userId: "user-1" });
+  prisma.appointment.findFirst = async () => null;
+  prisma.attendance.findFirst = async () => makeAttendance();
+  prisma.attendance.count = async () => 0;
+  prisma.appointment.count = async () => 0;
+  prisma.attendance.findMany = async () => {
+    throw new Error("não deve carregar histórico quando está desabilitado");
+  };
+  prisma.systemSetting.findMany = async () => [
+    {
+      id: "s1",
+      key: "client_portal_dashboard_show_recent_history",
+      value: "false",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  ];
+
+  const result = await getClientDashboard("user-1");
+
+  assert.deepEqual(result.recentHistory, []);
+});
+
 test("rota GET /dashboard exige authenticate e apenas CLIENTE pode acessar", () => {
   // Verifica que o router-level middleware inclui authorizeRoles(CLIENT)
   const routerMiddleware = clientPortalRoutes.stack.filter((layer) => !layer.route);
 
   assert.ok(
-    routerMiddleware.length >= 2,
-    "deve ter pelo menos 2 middlewares no router (authenticate + authorizeRoles)",
+    routerMiddleware.length >= 3,
+    "deve ter middlewares de authenticate, authorizeRoles e portal enabled",
   );
 
   // Verifica que authorizeRoles(CLIENT) rejeita ADMIN com ForbiddenError
@@ -328,4 +454,43 @@ test("rota GET /dashboard exige authenticate e apenas CLIENTE pode acessar", () 
   };
 
   authorizeRoles(ROLES.CLIENT)(professionalReq, {}, nextProfessional);
+});
+
+test("rota GET /config existe sem auth obrigatória", () => {
+  const configRoute = clientPortalRoutes.stack.find(
+    (entry) => entry.route?.path === "/config" && entry.route.methods?.get,
+  );
+
+  assert.ok(configRoute, "deve expor GET /config");
+});
+
+test("ensureClientPortalEnabled bloqueia o portal quando client_portal_enabled=false", async (t) => {
+  const original = prisma.systemSetting.findMany;
+
+  t.after(() => {
+    prisma.systemSetting.findMany = original;
+  });
+
+  prisma.systemSetting.findMany = async () => [
+    {
+      id: "setting-1",
+      key: "client_portal_enabled",
+      value: "false",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  ];
+
+  await new Promise((resolve, reject) => {
+    ensureClientPortalEnabled({}, {}, (error) => {
+      try {
+        assert.ok(error);
+        assert.equal(error.statusCode, 503);
+        assert.equal(error.message, "Portal do Cliente temporariamente indisponível.");
+        resolve();
+      } catch (assertionError) {
+        reject(assertionError);
+      }
+    });
+  });
 });
