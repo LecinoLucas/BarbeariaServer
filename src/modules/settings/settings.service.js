@@ -388,6 +388,74 @@ export function createSettingsService(deps = {}) {
     return getLoginAppearance();
   }
 
+  async function getPublicPortalSettings() {
+    // Reusing the getPublicPortal from public.service.js logic but within settings
+    // Actually, we can just import it or reimplement reading it. Let's read it directly.
+    const keys = [
+      "public_portal_enabled",
+      "public_portal_hero_title",
+      "public_portal_hero_subtitle",
+      "public_portal_hero_description",
+      "public_portal_about_title",
+      "public_portal_about_text",
+      "public_portal_cta_label",
+      "public_portal_cta_url",
+      "public_portal_whatsapp",
+      "public_portal_instagram",
+      "public_portal_address",
+      "public_portal_opening_hours_text",
+      "public_portal_show_service_prices",
+      "public_portal_show_product_prices",
+      "public_portal_hero_image_url",
+      "public_portal_logo_url",
+    ];
+    const rows = await repository.getMany(keys);
+    const map = toSettingsMap(rows);
+    
+    return {
+      enabled: map.public_portal_enabled !== "false",
+      heroTitle: map.public_portal_hero_title ?? "Alphamen Barbearia",
+      heroSubtitle: map.public_portal_hero_subtitle ?? "Estilo é identidade.",
+      heroDescription: map.public_portal_hero_description ?? null,
+      aboutTitle: map.public_portal_about_title ?? null,
+      aboutText: map.public_portal_about_text ?? null,
+      ctaLabel: map.public_portal_cta_label ?? "Agendar",
+      ctaUrl: map.public_portal_cta_url ?? null,
+      whatsapp: map.public_portal_whatsapp ?? null,
+      instagram: map.public_portal_instagram ?? null,
+      address: map.public_portal_address ?? null,
+      openingHoursText: map.public_portal_opening_hours_text ?? null,
+      showServicePrices: map.public_portal_show_service_prices !== "false",
+      showProductPrices: map.public_portal_show_product_prices !== "false",
+      heroImageUrl: map.public_portal_hero_image_url ?? null,
+      logoUrl: map.public_portal_logo_url ?? null,
+    };
+  }
+
+  async function updatePublicPortalSettings(payload) {
+    const pairs = [
+      { key: "public_portal_enabled", value: String(payload.enabled) },
+      { key: "public_portal_hero_title", value: payload.heroTitle },
+      { key: "public_portal_hero_subtitle", value: payload.heroSubtitle ?? "" },
+      { key: "public_portal_hero_description", value: payload.heroDescription ?? "" },
+      { key: "public_portal_about_title", value: payload.aboutTitle ?? "" },
+      { key: "public_portal_about_text", value: payload.aboutText ?? "" },
+      { key: "public_portal_cta_label", value: payload.ctaLabel ?? "" },
+      { key: "public_portal_cta_url", value: payload.ctaUrl ?? "" },
+      { key: "public_portal_whatsapp", value: payload.whatsapp ?? "" },
+      { key: "public_portal_instagram", value: payload.instagram ?? "" },
+      { key: "public_portal_address", value: payload.address ?? "" },
+      { key: "public_portal_opening_hours_text", value: payload.openingHoursText ?? "" },
+      { key: "public_portal_show_service_prices", value: String(payload.showServicePrices) },
+      { key: "public_portal_show_product_prices", value: String(payload.showProductPrices) },
+      { key: "public_portal_hero_image_url", value: payload.heroImageUrl ?? "" },
+      { key: "public_portal_logo_url", value: payload.logoUrl ?? "" },
+    ];
+    
+    await repository.upsertMany(pairs);
+    return getPublicPortalSettings();
+  }
+
   return {
     getSettings,
     updateSettings,
@@ -396,6 +464,8 @@ export function createSettingsService(deps = {}) {
     getPublicLoginAppearance,
     saveLoginAppearanceBackground,
     restoreDefaultLoginAppearance,
+    getPublicPortalSettings,
+    updatePublicPortalSettings,
   };
 }
 
@@ -409,6 +479,8 @@ export const {
   getPublicLoginAppearance,
   saveLoginAppearanceBackground,
   restoreDefaultLoginAppearance,
+  getPublicPortalSettings,
+  updatePublicPortalSettings,
 } = settingsService;
 
 export { MAX_BACKGROUND_IMAGE_SIZE_BYTES, publicAssetPrefix, storageRoot };

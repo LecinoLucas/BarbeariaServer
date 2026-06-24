@@ -19,6 +19,7 @@ import serviceRoutes from "../modules/services/service.routes.js";
 import productRoutes from "../modules/products/product.routes.js";
 import expenseRoutes from "../modules/expenses/expense.routes.js";
 import userRoutes from "../modules/users/user.routes.js";
+import publicRoutes from "../modules/public/public.routes.js";
 import prisma from "../database/prisma.js";
 
 const router = Router();
@@ -59,6 +60,7 @@ router.get("/ready", async (req, res) => {
 });
 
 router.use("/auth", authRoutes);
+router.use("/public", publicRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/users", userRoutes);
 router.use("/clients", clientRoutes);

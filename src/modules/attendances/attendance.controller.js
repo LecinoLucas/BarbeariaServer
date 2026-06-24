@@ -15,6 +15,10 @@ import {
   updateProductQuantity,
 } from "./attendance.service.js";
 import {
+  getAttendanceReceiptData,
+  renderAttendanceReceiptPdf,
+} from "./attendance.receipt.service.js";
+import {
   validateAddAttendanceItem,
   validateAddAttendanceProduct,
   validateFinishAttendanceWithPayment,
@@ -131,6 +135,27 @@ export async function cancelAttendanceHandler(req, res, next) {
   try {
     await cancelAttendance(req.params.id);
     return successResponse(res, null, "Atendimento cancelado com sucesso.");
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function getAttendanceReceiptPdfHandler(req, res, next) {
+  try {
+    const receiptData = await getAttendanceReceiptData(req.params.id, req.user);
+    const download = req.query.download === "true";
+    const shortId = req.params.id.slice(0, 8).toUpperCase();
+    const filename = `comprovante-atendimento-${shortId}.pdf`;
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `${download ? "attachment" : "inline"}; filename="${filename}"`,
+    );
+
+    const doc = renderAttendanceReceiptPdf(receiptData);
+    doc.pipe(res);
+    doc.end();
   } catch (error) {
     return next(error);
   }

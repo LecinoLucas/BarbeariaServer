@@ -27,21 +27,12 @@ function getReminderMinutes(setting) {
 }
 
 function buildReminderPayload(appointment) {
-  const timeFormatted = new Intl.DateTimeFormat("pt-BR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "America/Sao_Paulo",
-  }).format(new Date(appointment.startAt));
-
   return {
     appointmentId: appointment.id,
     clientId: appointment.clientId,
-    clientName: appointment.client?.name,
     professionalId: appointment.professionalId,
-    professionalName: appointment.professional?.name,
     serviceId: appointment.serviceId,
     startAt: appointment.startAt,
-    time: timeFormatted,
   };
 }
 

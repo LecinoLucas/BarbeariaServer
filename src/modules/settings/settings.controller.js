@@ -2,16 +2,38 @@ import { successResponse } from "../../utils/response.js";
 import {
   getLoginAppearance,
   getPublicLoginAppearance,
+  getPublicPortalSettings,
   getSettings,
   restoreDefaultLoginAppearance,
   saveLoginAppearanceBackground,
   updateLoginAppearance,
+  updatePublicPortalSettings,
   updateSettings,
 } from "./settings.service.js";
 import {
   validateLoginAppearance,
   validateSettings,
 } from "./settings.validator.js";
+import { validatePublicPortalSettings } from "./publicPortal.validator.js";
+
+export async function getPublicPortalSettingsHandler(req, res, next) {
+  try {
+    const settings = await getPublicPortalSettings();
+    return successResponse(res, settings, "Configurações do portal carregadas com sucesso.");
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function updatePublicPortalSettingsHandler(req, res, next) {
+  try {
+    const data = validatePublicPortalSettings(req.body);
+    const settings = await updatePublicPortalSettings(data);
+    return successResponse(res, settings, "Configurações do portal atualizadas com sucesso.");
+  } catch (error) {
+    return next(error);
+  }
+}
 
 export async function getSettingsHandler(req, res, next) {
   try {

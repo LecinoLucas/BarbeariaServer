@@ -10,6 +10,7 @@ import {
   finishAttendanceHandler,
   finishAttendanceWithPaymentHandler,
   getAttendanceByIdHandler,
+  getAttendanceReceiptPdfHandler,
   listAttendancesHandler,
   listItemsHandler,
   listProductsHandler,
@@ -43,6 +44,7 @@ router.delete(
   removeItemHandler,
 );
 
+router.get("/:id/receipt.pdf", getAttendanceReceiptPdfHandler);
 router.post("/:id/finish-with-payment", finishAttendanceWithPaymentHandler);
 router.post("/:id/finish", finishAttendanceHandler);
 router.post("/:id/cancel", authorizeRoles(ROLES.ADMIN), cancelAttendanceHandler);

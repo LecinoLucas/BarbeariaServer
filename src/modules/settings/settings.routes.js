@@ -7,9 +7,11 @@ import { authorizeRoles } from "../../middlewares/role.middleware.js";
 import {
   getLoginAppearanceHandler,
   getPublicLoginAppearanceHandler,
+  getPublicPortalSettingsHandler,
   getSettingsHandler,
   restoreDefaultLoginAppearanceHandler,
   updateLoginAppearanceHandler,
+  updatePublicPortalSettingsHandler,
   updateSettingsHandler,
   uploadLoginAppearanceBackgroundHandler,
 } from "./settings.controller.js";
@@ -24,6 +26,8 @@ router.use(authorizeRoles(ROLES.ADMIN));
 
 router.get("/", getSettingsHandler);
 router.put("/", updateSettingsHandler);
+router.get("/public-portal", getPublicPortalSettingsHandler);
+router.put("/public-portal", updatePublicPortalSettingsHandler);
 router.get("/login-appearance", getLoginAppearanceHandler);
 router.put("/login-appearance", updateLoginAppearanceHandler);
 router.delete("/login-appearance", restoreDefaultLoginAppearanceHandler);
