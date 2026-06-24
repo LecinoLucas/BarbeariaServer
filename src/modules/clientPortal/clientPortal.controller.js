@@ -1,6 +1,7 @@
 import { successResponse } from "../../utils/response.js";
 import {
   cancelOwnAppointment,
+  createOwnClientAppointment,
   getClientPortalAvailability,
   getClientDashboard,
   getClientProfile,
@@ -12,6 +13,7 @@ import {
   updateOwnClientProfile,
 } from "./clientPortal.service.js";
 import {
+  validateCreateClientPortalAppointment,
   validateClientPortalAvailabilityQuery,
   validateListClientAppointmentsQuery,
   validateListClientAttendancesQuery,
@@ -51,6 +53,16 @@ export async function getClientPortalAvailabilityHandler(req, res, next) {
     const query = validateClientPortalAvailabilityQuery(req.query);
     const data = await getClientPortalAvailability(query, req.user.id);
     return successResponse(res, data, "Horários disponíveis carregados com sucesso.");
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function createClientAppointmentHandler(req, res, next) {
+  try {
+    const payload = validateCreateClientPortalAppointment(req.body);
+    const data = await createOwnClientAppointment(payload, req.user.id);
+    return successResponse(res, data, "Agendamento criado com sucesso.", 201);
   } catch (error) {
     return next(error);
   }

@@ -12,16 +12,23 @@ import {
 import { SOCKET_EVENTS } from "../../socket/socket.events.js";
 import {
   buildAppointmentCanceledMessage,
+  buildAppointmentCreatedMessage,
   buildAppointmentNotificationMetadata,
   buildAppointmentRescheduledMessage,
 } from "../../utils/appointmentNotificationFormatter.js";
 import {
+  combineBusinessDateAndTimeToUtc,
   getBusinessDateKeyFromUtc,
   getBusinessTimeFromUtc,
 } from "../../utils/agendaTimezone.js";
-import { getAvailability as getAppointmentAvailability } from "../appointments/appointment.service.js";
+import {
+  assertAppointmentSlotAvailability,
+  getAvailability as getAppointmentAvailability,
+} from "../appointments/appointment.service.js";
+import { findActiveClientServiceAppointment } from "../appointments/appointment.repository.js";
 import {
   cancelReminderForAppointment,
+  createReminderForAppointment,
   recalculateReminderForAppointment,
 } from "../appointmentReminders/appointmentReminder.service.js";
 import {
@@ -30,6 +37,7 @@ import {
   countAppointments,
   countAttendances,
   countFinishedAttendancesByPeriod,
+  createClientPortalAppointment,
   createNotification,
   findActiveProfessionalScheduleByWeekday,
   findAdmins,
@@ -64,6 +72,14 @@ const DEFAULT_OPEN_TIME = "09:00";
 const DEFAULT_CLOSE_TIME = "18:00";
 const DEFAULT_ALLOW_CLIENT_CANCEL = true;
 const DEFAULT_ALLOW_CLIENT_RESCHEDULE = true;
+const CLIENT_PORTAL_STATUS_LABELS = {
+  [APPOINTMENT_STATUS.SCHEDULED]: "Agendado",
+  [APPOINTMENT_STATUS.CONFIRMED]: "Confirmado",
+  [APPOINTMENT_STATUS.IN_ATTENDANCE]: "Em atendimento",
+  [APPOINTMENT_STATUS.FINISHED]: "Finalizado",
+  [APPOINTMENT_STATUS.CANCELED]: "Cancelado",
+  [APPOINTMENT_STATUS.NO_SHOW]: "Não compareceu",
+};
 
 function normalizePhone(phone) {
   return phone.trim();
@@ -125,6 +141,10 @@ function toAppointmentEventPayload(appointment) {
         }
       : null,
   };
+}
+
+function getAppointmentStatusLabel(status) {
+  return CLIENT_PORTAL_STATUS_LABELS[status] ?? "Status desconhecido";
 }
 
 async function ensureClientProfile(userId) {
@@ -204,6 +224,23 @@ function ensureAppointentCanBeManagedByClient(appointment) {
     throw new BadRequestError(
       "O cliente só pode alterar agendamentos agendados ou confirmados.",
     );
+  }
+}
+
+function canClientCancelAppointment(appointment, now = new Date()) {
+  if (!appointment?.startAt || appointment.startAt <= now) {
+    return false;
+  }
+
+  return (
+    appointment.status === APPOINTMENT_STATUS.SCHEDULED ||
+    appointment.status === APPOINTMENT_STATUS.CONFIRMED
+  );
+}
+
+function ensureAppointmentCanBeCanceledByClient(appointment) {
+  if (!canClientCancelAppointment(appointment)) {
+    throw new BadRequestError("Este agendamento não pode ser cancelado.");
   }
 }
 
@@ -314,6 +351,30 @@ function toPriceCents(price) {
   return Math.round(Number(price) * 100);
 }
 
+function formatCreatedAppointment(appointment) {
+  return {
+    id: appointment.id,
+    date: getBusinessDateKeyFromUtc(appointment.startAt),
+    time: getBusinessTimeFromUtc(appointment.startAt),
+    status: appointment.status,
+    professionalName: appointment.professional?.name ?? null,
+    serviceName: appointment.service?.name ?? null,
+  };
+}
+
+function formatClientPortalAppointment(appointment, now = new Date()) {
+  return {
+    id: appointment.id,
+    date: getBusinessDateKeyFromUtc(appointment.startAt),
+    time: getBusinessTimeFromUtc(appointment.startAt),
+    status: appointment.status,
+    statusLabel: getAppointmentStatusLabel(appointment.status),
+    professionalName: appointment.professional?.name ?? null,
+    services: appointment.service?.name ? [appointment.service.name] : [],
+    canCancel: canClientCancelAppointment(appointment, now),
+  };
+}
+
 export async function getClientDashboard(userId) {
   const client = await ensureClientProfile(userId);
   const now = new Date();
@@ -394,15 +455,71 @@ export async function getClientPortalAvailability(query, userId) {
   };
 }
 
+export async function createOwnClientAppointment(payload, userId) {
+  const client = await ensureClientProfile(userId);
+  const service = await findServiceById(payload.serviceId);
+
+  if (!service || service.status !== SERVICE_STATUS.ACTIVE) {
+    throw new BadRequestError("Serviço não encontrado ou inativo.");
+  }
+
+  const existingAppointment = await findActiveClientServiceAppointment(client.id, payload.serviceId);
+
+  if (existingAppointment) {
+    throw new ConflictError("Você já possui um agendamento ativo para este serviço.");
+  }
+
+  const requestedStartAt = combineBusinessDateAndTimeToUtc(payload.date, payload.time);
+
+  if (requestedStartAt <= new Date()) {
+    throw new BadRequestError("Não é possível criar agendamento em horário passado.");
+  }
+
+  const { startUtc, endUtc } = await assertAppointmentSlotAvailability({
+    professionalId: payload.professionalId,
+    date: payload.date,
+    time: payload.time,
+    durationMinutes: service.durationMinutes,
+  });
+
+  const appointment = await createClientPortalAppointment({
+    clientId: client.id,
+    professionalId: payload.professionalId,
+    serviceId: payload.serviceId,
+    startAt: startUtc,
+    endAt: endUtc,
+    status: APPOINTMENT_STATUS.SCHEDULED,
+    notes: payload.notes,
+  });
+
+  await createReminderForAppointment(appointment);
+
+  await createAdminNotifications({
+    title: "Novo agendamento",
+    message: buildAppointmentCreatedMessage(appointment),
+    type: NOTIFICATION_TYPES.APPOINTMENT_CREATED,
+    metadata: buildAppointmentNotificationMetadata(appointment, {
+      clientId: client.id,
+    }),
+  });
+
+  emitToAdmins(SOCKET_EVENTS.APPOINTMENT_CREATED, toAppointmentEventPayload(appointment));
+
+  return {
+    appointment: formatCreatedAppointment(appointment),
+  };
+}
+
 export async function listClientAppointments(query, userId) {
   const client = await ensureClientProfile(userId);
+  const now = new Date();
   const [items, total] = await Promise.all([
     listAppointments(client.id, query),
     countAppointments(client.id, query),
   ]);
 
   return {
-    items,
+    items: items.map((item) => formatClientPortalAppointment(item, now)),
     meta: {
       page: query.page,
       limit: query.limit,
@@ -453,7 +570,7 @@ export async function cancelOwnAppointment(appointmentId, userId) {
   await ensureClientCancelAllowed();
 
   const appointment = await ensureOwnAppointment(appointmentId, client.id);
-  ensureAppointentCanBeManagedByClient(appointment);
+  ensureAppointmentCanBeCanceledByClient(appointment);
 
   const updatedAppointment = await updateAppointmentStatus(
     appointment.id,
@@ -476,7 +593,13 @@ export async function cancelOwnAppointment(appointmentId, userId) {
     toAppointmentEventPayload(updatedAppointment),
   );
 
-  return updatedAppointment;
+  return {
+    appointment: {
+      id: updatedAppointment.id,
+      status: updatedAppointment.status,
+      statusLabel: getAppointmentStatusLabel(updatedAppointment.status),
+    },
+  };
 }
 
 export async function rescheduleOwnAppointment(appointmentId, payload, userId) {

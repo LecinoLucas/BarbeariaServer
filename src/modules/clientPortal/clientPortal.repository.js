@@ -132,6 +132,35 @@ const clientPortalProfessionalSelect = {
   specialty: true,
 };
 
+const clientPortalAppointmentSelect = {
+  id: true,
+  clientId: true,
+  professionalId: true,
+  serviceId: true,
+  startAt: true,
+  endAt: true,
+  status: true,
+  notes: true,
+  professional: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
+  service: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
+  client: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
+};
+
 function buildAppointmentsWhere(clientId, filters) {
   const where = {
     clientId,
@@ -429,6 +458,13 @@ export function listActiveClientPortalProfessionals() {
       name: "asc",
     },
     select: clientPortalProfessionalSelect,
+  });
+}
+
+export function createClientPortalAppointment(data) {
+  return prisma.appointment.create({
+    data,
+    select: clientPortalAppointmentSelect,
   });
 }
 

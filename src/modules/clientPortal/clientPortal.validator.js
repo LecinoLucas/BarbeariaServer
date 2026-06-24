@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { APPOINTMENT_STATUS } from "../../constants/appointmentStatus.js";
 import { ValidationError } from "../../errors/ValidationError.js";
+import { assertBusinessTime } from "../../utils/agendaTimezone.js";
 
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -138,6 +139,36 @@ const clientPortalAvailabilityQuerySchema = z.object({
   }),
 });
 
+const createClientPortalAppointmentSchema = z.object({
+  professionalId: z
+    .string({ required_error: "professionalId é obrigatório." })
+    .trim()
+    .min(1, "professionalId inválido."),
+  serviceId: z
+    .string({ required_error: "serviceId é obrigatório." })
+    .trim()
+    .min(1, "serviceId inválido."),
+  date: z.string({ required_error: "date é obrigatório." }).superRefine((value, ctx) => {
+    if (!isValidDateString(value)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Data inválida.",
+      });
+    }
+  }),
+  time: z.string({ required_error: "time é obrigatório." }).superRefine((value, ctx) => {
+    try {
+      assertBusinessTime(value);
+    } catch {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Horário inválido.",
+      });
+    }
+  }),
+  notes: optionalNotesSchema,
+});
+
 function parseOrThrow(schema, payload) {
   const result = schema.safeParse(payload);
 
@@ -166,4 +197,8 @@ export function validateRescheduleClientAppointment(payload) {
 
 export function validateClientPortalAvailabilityQuery(payload) {
   return parseOrThrow(clientPortalAvailabilityQuerySchema, payload);
+}
+
+export function validateCreateClientPortalAppointment(payload) {
+  return parseOrThrow(createClientPortalAppointmentSchema, payload);
 }

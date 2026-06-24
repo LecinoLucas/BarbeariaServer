@@ -5,6 +5,7 @@ import { authenticate } from "../../middlewares/auth.middleware.js";
 import { authorizeRoles } from "../../middlewares/role.middleware.js";
 import {
   cancelClientAppointmentHandler,
+  createClientAppointmentHandler,
   getClientPortalAvailabilityHandler,
   getClientDashboardHandler,
   getClientProfileHandler,
@@ -24,10 +25,12 @@ router.get("/dashboard", getClientDashboardHandler);
 router.get("/services", listClientPortalServicesHandler);
 router.get("/professionals", listClientPortalProfessionalsHandler);
 router.get("/availability", getClientPortalAvailabilityHandler);
+router.post("/appointments", createClientAppointmentHandler);
 router.get("/appointments", listClientAppointmentsHandler);
 router.get("/attendances", listClientAttendancesHandler);
 router.get("/profile", getClientProfileHandler);
 router.put("/profile", updateClientProfileHandler);
+router.patch("/appointments/:id/cancel", cancelClientAppointmentHandler);
 router.post("/appointments/:id/cancel", cancelClientAppointmentHandler);
 router.post("/appointments/:id/reschedule", rescheduleClientAppointmentHandler);
 
