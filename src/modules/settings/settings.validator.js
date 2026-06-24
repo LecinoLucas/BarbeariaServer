@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { ValidationError } from "../../errors/ValidationError.js";
+import { normalizeReceiptTemplate } from "./settings.service.js";
 
 const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
 const htmlLikeRegex = /<[^>]+>/;
@@ -41,6 +42,18 @@ const internalAssetPathRegex = /^\/login-appearance-assets\/[a-z0-9][a-z0-9._-]*
 const externalHttpUrlSchema = z.string().url().refine((value) => /^https?:\/\//i.test(value), {
   message: "backgroundImageUrl deve ser uma URL http(s) válida.",
 });
+const canonicalReceiptTemplateValues = ["classic", "clean_compact"];
+const legacyReceiptTemplateAliases = new Set([
+  "classic",
+  "model_1",
+  "modelo_1",
+  "1",
+  "clean_compact",
+  "clean-compact",
+  "model_2",
+  "modelo_2",
+  "2",
+]);
 
 export const settingsSchema = z.object({
   barbershopName: z
@@ -106,7 +119,21 @@ export const settingsSchema = z.object({
   allowClientCancel: z.boolean({ required_error: "allowClientCancel é obrigatório.", invalid_type_error: "allowClientCancel deve ser boolean." }),
   allowClientReschedule: z.boolean({ required_error: "allowClientReschedule é obrigatório.", invalid_type_error: "allowClientReschedule deve ser boolean." }),
 
-  receiptTemplate: z.enum(["classic", "clean_compact"]).optional().default("classic"),
+  receiptTemplate: z.preprocess(
+    (value) => {
+      if (typeof value !== "string") {
+        return value;
+      }
+
+      const raw = value.trim().toLowerCase();
+      if (!legacyReceiptTemplateAliases.has(raw)) {
+        return value;
+      }
+
+      return normalizeReceiptTemplate(raw);
+    },
+    z.enum(canonicalReceiptTemplateValues).optional().default("classic"),
+  ),
 });
 
 export const loginAppearanceSchema = z.object({

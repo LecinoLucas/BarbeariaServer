@@ -83,6 +83,18 @@ const allowedUploadMimeTypes = new Map([
 
 const MAX_BACKGROUND_IMAGE_SIZE_BYTES = 2 * 1024 * 1024;
 const publicAssetPrefix = "/login-appearance-assets";
+const RECEIPT_TEMPLATE_DEFAULT = "classic";
+const RECEIPT_TEMPLATE_ALIASES = new Map([
+  ["classic", "classic"],
+  ["model_1", "classic"],
+  ["modelo_1", "classic"],
+  ["1", "classic"],
+  ["clean_compact", "clean_compact"],
+  ["clean-compact", "clean_compact"],
+  ["model_2", "clean_compact"],
+  ["modelo_2", "clean_compact"],
+  ["2", "clean_compact"],
+]);
 
 function toSettingsMap(rows) {
   const map = {};
@@ -121,7 +133,7 @@ function shapeSettings(map) {
     appointmentIntervalMinutes: parseInt(get("appointment_interval_minutes"), 10),
     allowClientCancel: get("allow_client_cancel") === "true",
     allowClientReschedule: get("allow_client_reschedule") === "true",
-    receiptTemplate: get("receipt_template"),
+    receiptTemplate: normalizeReceiptTemplate(get("receipt_template")),
   };
 }
 
@@ -149,8 +161,20 @@ function toGeneralKeyValuePairs(payload) {
     { key: "appointment_interval_minutes", value: String(payload.appointmentIntervalMinutes) },
     { key: "allow_client_cancel", value: String(payload.allowClientCancel) },
     { key: "allow_client_reschedule", value: String(payload.allowClientReschedule) },
-    { key: "receipt_template", value: payload.receiptTemplate || "classic" },
+    {
+      key: "receipt_template",
+      value: normalizeReceiptTemplate(payload.receiptTemplate),
+    },
   ];
+}
+
+export function normalizeReceiptTemplate(value) {
+  if (typeof value !== "string") {
+    return RECEIPT_TEMPLATE_DEFAULT;
+  }
+
+  const normalized = RECEIPT_TEMPLATE_ALIASES.get(value.trim().toLowerCase());
+  return normalized ?? RECEIPT_TEMPLATE_DEFAULT;
 }
 
 function applyLoginAppearanceFallback(config) {

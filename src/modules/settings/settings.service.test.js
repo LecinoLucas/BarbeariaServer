@@ -6,7 +6,7 @@ import {
   LOGIN_APPEARANCE_DEFAULTS,
   createSettingsService,
 } from "./settings.service.js";
-import { validateLoginAppearance } from "./settings.validator.js";
+import { validateLoginAppearance, validateSettings } from "./settings.validator.js";
 import { validatePublicPortalSettings } from "./publicPortal.validator.js";
 
 function buildSettingRow(key, value, updatedAt = "2026-06-23T12:00:00.000Z") {
@@ -89,6 +89,174 @@ test("updateLoginAppearance persiste opcionais como vazio e reaplica fallback p�
     },
     { key: "login_appearance_background_image_alt", value: "" },
   ]);
+});
+
+test("getSettings usa default seguro quando receipt_template está ausente", async () => {
+  const { service } = createServiceHarness({
+    getManyResult: [
+      buildSettingRow("barbershop_name", "AlphaMen"),
+      buildSettingRow("default_open_time", "09:00"),
+      buildSettingRow("default_close_time", "18:00"),
+      buildSettingRow("appointment_interval_minutes", "5"),
+      buildSettingRow("appointment_reminder_minutes", "15"),
+      buildSettingRow("allow_client_cancel", "true"),
+      buildSettingRow("allow_client_reschedule", "true"),
+    ],
+  });
+
+  const result = await service.getSettings();
+
+  assert.equal(result.receiptTemplate, "classic");
+});
+
+test("getSettings normaliza valor legado do modelo 2", async () => {
+  const { service } = createServiceHarness({
+    getManyResult: [
+      buildSettingRow("receipt_template", "model_2"),
+    ],
+  });
+
+  const result = await service.getSettings();
+
+  assert.equal(result.receiptTemplate, "clean_compact");
+});
+
+test("updateSettings persiste receiptTemplate classic", async () => {
+  let savedPairs = [];
+  const { service, calls } = createServiceHarness({
+    async upsertMany(pairs) {
+      savedPairs = pairs;
+      calls.upsertMany.push(pairs);
+      return pairs;
+    },
+    async getMany(keys) {
+      calls.getMany.push(keys);
+      return savedPairs.map(({ key, value }) => buildSettingRow(key, value));
+    },
+  });
+
+  const result = await service.updateSettings({
+    barbershopName: "AlphaMen",
+    phone: "",
+    whatsapp: "",
+    instagram: "",
+    email: "",
+    address: {
+      street: "",
+      number: "",
+      district: "",
+      city: "",
+      state: "",
+      zipcode: "",
+    },
+    appointmentReminderEnabled: true,
+    appointmentReminderEmailEnabled: false,
+    appointmentReminderMinutes: 15,
+    defaultOpenTime: "09:00",
+    defaultCloseTime: "18:00",
+    appointmentIntervalMinutes: 5,
+    allowClientCancel: true,
+    allowClientReschedule: true,
+    receiptTemplate: "classic",
+  });
+
+  assert.equal(
+    calls.upsertMany[0].find((entry) => entry.key === "receipt_template")?.value,
+    "classic",
+  );
+  assert.equal(result.receiptTemplate, "classic");
+});
+
+test("updateSettings persiste receiptTemplate clean_compact", async () => {
+  let savedPairs = [];
+  const { service, calls } = createServiceHarness({
+    async upsertMany(pairs) {
+      savedPairs = pairs;
+      calls.upsertMany.push(pairs);
+      return pairs;
+    },
+    async getMany(keys) {
+      calls.getMany.push(keys);
+      return savedPairs.map(({ key, value }) => buildSettingRow(key, value));
+    },
+  });
+
+  const result = await service.updateSettings({
+    barbershopName: "AlphaMen",
+    phone: "",
+    whatsapp: "",
+    instagram: "",
+    email: "",
+    address: {
+      street: "",
+      number: "",
+      district: "",
+      city: "",
+      state: "",
+      zipcode: "",
+    },
+    appointmentReminderEnabled: true,
+    appointmentReminderEmailEnabled: false,
+    appointmentReminderMinutes: 15,
+    defaultOpenTime: "09:00",
+    defaultCloseTime: "18:00",
+    appointmentIntervalMinutes: 5,
+    allowClientCancel: true,
+    allowClientReschedule: true,
+    receiptTemplate: "clean_compact",
+  });
+
+  assert.equal(
+    calls.upsertMany[0].find((entry) => entry.key === "receipt_template")?.value,
+    "clean_compact",
+  );
+  assert.equal(result.receiptTemplate, "clean_compact");
+});
+
+test("validateSettings aceita alias legado e normaliza para modelo 2 canônico", () => {
+  const result = validateSettings({
+    barbershopName: "AlphaMen",
+    phone: "",
+    whatsapp: "",
+    instagram: "",
+    email: "",
+    address: {},
+    appointmentReminderEnabled: true,
+    appointmentReminderEmailEnabled: false,
+    appointmentReminderMinutes: 15,
+    defaultOpenTime: "09:00",
+    defaultCloseTime: "18:00",
+    appointmentIntervalMinutes: 5,
+    allowClientCancel: true,
+    allowClientReschedule: true,
+    receiptTemplate: "model_2",
+  });
+
+  assert.equal(result.receiptTemplate, "clean_compact");
+});
+
+test("validateSettings rejeita receiptTemplate inválido", () => {
+  assert.throws(
+    () =>
+      validateSettings({
+        barbershopName: "AlphaMen",
+        phone: "",
+        whatsapp: "",
+        instagram: "",
+        email: "",
+        address: {},
+        appointmentReminderEnabled: true,
+        appointmentReminderEmailEnabled: false,
+        appointmentReminderMinutes: 15,
+        defaultOpenTime: "09:00",
+        defaultCloseTime: "18:00",
+        appointmentIntervalMinutes: 5,
+        allowClientCancel: true,
+        allowClientReschedule: true,
+        receiptTemplate: "modelo_x",
+      }),
+    (error) => error instanceof ValidationError,
+  );
 });
 
 test("getPublicLoginAppearance retorna apenas campos seguros", async () => {
