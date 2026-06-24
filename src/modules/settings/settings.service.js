@@ -208,6 +208,17 @@ function shapeLoginAppearance(map) {
   });
 }
 
+function getPublicPortalString(map, key, fallback = null) {
+  const value = map[key];
+
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
+}
+
 function toLoginAppearanceKeyValuePairs(payload) {
   return [
     { key: "login_appearance_hero_title", value: payload.heroTitle },
@@ -389,8 +400,6 @@ export function createSettingsService(deps = {}) {
   }
 
   async function getPublicPortalSettings() {
-    // Reusing the getPublicPortal from public.service.js logic but within settings
-    // Actually, we can just import it or reimplement reading it. Let's read it directly.
     const keys = [
       "public_portal_enabled",
       "public_portal_hero_title",
@@ -411,24 +420,24 @@ export function createSettingsService(deps = {}) {
     ];
     const rows = await repository.getMany(keys);
     const map = toSettingsMap(rows);
-    
+
     return {
       enabled: map.public_portal_enabled !== "false",
-      heroTitle: map.public_portal_hero_title ?? "Alphamen Barbearia",
-      heroSubtitle: map.public_portal_hero_subtitle ?? "Estilo é identidade.",
-      heroDescription: map.public_portal_hero_description ?? null,
-      aboutTitle: map.public_portal_about_title ?? null,
-      aboutText: map.public_portal_about_text ?? null,
-      ctaLabel: map.public_portal_cta_label ?? "Agendar",
-      ctaUrl: map.public_portal_cta_url ?? null,
-      whatsapp: map.public_portal_whatsapp ?? null,
-      instagram: map.public_portal_instagram ?? null,
-      address: map.public_portal_address ?? null,
-      openingHoursText: map.public_portal_opening_hours_text ?? null,
+      heroTitle: getPublicPortalString(map, "public_portal_hero_title", "Alphamen Barbearia"),
+      heroSubtitle: getPublicPortalString(map, "public_portal_hero_subtitle", "Estilo é identidade."),
+      heroDescription: getPublicPortalString(map, "public_portal_hero_description"),
+      aboutTitle: getPublicPortalString(map, "public_portal_about_title"),
+      aboutText: getPublicPortalString(map, "public_portal_about_text"),
+      ctaLabel: getPublicPortalString(map, "public_portal_cta_label", "Agendar"),
+      ctaUrl: getPublicPortalString(map, "public_portal_cta_url"),
+      whatsapp: getPublicPortalString(map, "public_portal_whatsapp"),
+      instagram: getPublicPortalString(map, "public_portal_instagram"),
+      address: getPublicPortalString(map, "public_portal_address"),
+      openingHoursText: getPublicPortalString(map, "public_portal_opening_hours_text"),
       showServicePrices: map.public_portal_show_service_prices !== "false",
       showProductPrices: map.public_portal_show_product_prices !== "false",
-      heroImageUrl: map.public_portal_hero_image_url ?? null,
-      logoUrl: map.public_portal_logo_url ?? null,
+      heroImageUrl: getPublicPortalString(map, "public_portal_hero_image_url"),
+      logoUrl: getPublicPortalString(map, "public_portal_logo_url"),
     };
   }
 

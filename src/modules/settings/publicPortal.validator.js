@@ -35,6 +35,26 @@ function rejectUnsafeText(fieldLabel, maxLength, { required = false } = {}) {
   );
 }
 
+function optionalHttpUrl(fieldLabel, maxLength) {
+  return z
+    .string()
+    .trim()
+    .max(maxLength, `${fieldLabel} deve ter no máximo ${maxLength} caracteres.`)
+    .optional()
+    .nullable()
+    .transform((value) => {
+      if (typeof value !== "string") {
+        return null;
+      }
+
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    })
+    .refine((value) => !value || /^https?:\/\//i.test(value), {
+      message: `${fieldLabel} deve ser uma URL http(s) válida.`,
+    });
+}
+
 export const publicPortalSettingsSchema = z.object({
   enabled: z.boolean({
     required_error: "enabled é obrigatório.",
@@ -46,9 +66,9 @@ export const publicPortalSettingsSchema = z.object({
   aboutTitle: rejectUnsafeText("Título sobre", 100),
   aboutText: rejectUnsafeText("Texto sobre", 2000),
   ctaLabel: rejectUnsafeText("Rótulo do CTA", 50, { required: true }),
-  ctaUrl: rejectUnsafeText("URL do CTA", 500),
+  ctaUrl: optionalHttpUrl("URL do CTA", 500),
   whatsapp: rejectUnsafeText("WhatsApp", 20),
-  instagram: rejectUnsafeText("Instagram", 120),
+  instagram: optionalHttpUrl("Instagram", 120),
   address: rejectUnsafeText("Endereço", 500),
   openingHoursText: rejectUnsafeText("Horário de funcionamento", 500),
   showServicePrices: z.boolean({
@@ -59,8 +79,8 @@ export const publicPortalSettingsSchema = z.object({
     required_error: "showProductPrices é obrigatório.",
     invalid_type_error: "showProductPrices deve ser boolean.",
   }),
-  heroImageUrl: rejectUnsafeText("URL da imagem principal", 500),
-  logoUrl: rejectUnsafeText("URL do logotipo", 500),
+  heroImageUrl: optionalHttpUrl("URL da imagem principal", 500),
+  logoUrl: optionalHttpUrl("URL do logotipo", 500),
 });
 
 export function validatePublicPortalSettings(payload) {

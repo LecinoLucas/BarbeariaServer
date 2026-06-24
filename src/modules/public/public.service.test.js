@@ -69,6 +69,39 @@ test("getPublicPortal returns mapped settings", async () => {
   assert.equal(portal.enabled, false);
   assert.equal(portal.heroTitle, "Bem-vindo");
   assert.equal(portal.showServicePrices, false);
+  assert.equal(portal.internalNotes, undefined);
+});
+
+test("getPublicPortal returns only public-facing fields", async () => {
+  const { deps } = buildDeps({
+    getMany: () => [
+      { key: "barbershop_name", value: "Minha Barbearia" },
+      { key: "public_portal_whatsapp", value: "5511999999999" },
+      { key: "public_portal_opening_hours_text", value: "Seg a sáb, 09h às 18h" },
+    ],
+  });
+
+  const portal = await getPublicPortal(deps);
+
+  assert.deepEqual(Object.keys(portal).sort(), [
+    "aboutText",
+    "aboutTitle",
+    "address",
+    "barbershopName",
+    "ctaLabel",
+    "ctaUrl",
+    "enabled",
+    "heroDescription",
+    "heroImageUrl",
+    "heroSubtitle",
+    "heroTitle",
+    "instagram",
+    "logoUrl",
+    "openingHoursText",
+    "showProductPrices",
+    "showServicePrices",
+    "whatsapp",
+  ]);
 });
 
 test("getPublicServices returns items and meta", async () => {
