@@ -3,12 +3,16 @@ import { successResponse } from "../../utils/response.js";
 import {
   changePassword as changePasswordService,
   login as loginService,
+  loginWithGoogle as loginWithGoogleService,
   me as meService,
   refresh as refreshService,
+  signup as signupService,
 } from "./clientAuth.service.js";
 import {
+  validateClientAuthGoogle,
   validateClientAuthLogin,
   validateClientAuthPassword,
+  validateClientAuthSignup,
 } from "./clientAuth.validator.js";
 
 export const CLIENT_REFRESH_TOKEN_COOKIE_NAME = "clientRefreshToken";
@@ -27,9 +31,11 @@ export function getClientRefreshTokenCookieOptions() {
 export function createClientAuthController(deps = {}) {
   const service = {
     login: loginService,
+    loginWithGoogle: loginWithGoogleService,
     refresh: refreshService,
     me: meService,
     changePassword: changePasswordService,
+    signup: signupService,
     ...deps,
   };
 
@@ -53,6 +59,79 @@ export function createClientAuthController(deps = {}) {
             client: result.client,
           },
           "Login do cliente realizado com sucesso.",
+        );
+      } catch (error) {
+        return next(error);
+      }
+    },
+
+    async signup(req, res, next) {
+      try {
+        const data = validateClientAuthSignup(req.body);
+        const result = await service.signup(data);
+
+        if (result?.refreshToken) {
+          res.cookie(
+            CLIENT_REFRESH_TOKEN_COOKIE_NAME,
+            result.refreshToken,
+            getClientRefreshTokenCookieOptions(),
+          );
+
+          return successResponse(
+            res,
+            {
+              accessToken: result.accessToken,
+              user: result.user,
+              client: result.client,
+            },
+            "Cadastro realizado com sucesso.",
+            201,
+          );
+        }
+
+        return successResponse(
+          res,
+          {
+            requiresAdminApproval: true,
+          },
+          result?.message ?? "Cadastro realizado com sucesso.",
+          201,
+        );
+      } catch (error) {
+        return next(error);
+      }
+    },
+
+    async google(req, res, next) {
+      try {
+        const data = validateClientAuthGoogle(req.body);
+        const result = await service.loginWithGoogle(data);
+
+        if (result?.refreshToken) {
+          res.cookie(
+            CLIENT_REFRESH_TOKEN_COOKIE_NAME,
+            result.refreshToken,
+            getClientRefreshTokenCookieOptions(),
+          );
+
+          return successResponse(
+            res,
+            {
+              accessToken: result.accessToken,
+              user: result.user,
+              client: result.client,
+            },
+            "Login com Google realizado com sucesso.",
+          );
+        }
+
+        return successResponse(
+          res,
+          {
+            requiresAdminApproval: true,
+          },
+          result?.message ?? "Cadastro realizado com sucesso.",
+          201,
         );
       } catch (error) {
         return next(error);
@@ -116,3 +195,5 @@ export const refresh = defaultController.refresh;
 export const logout = defaultController.logout;
 export const me = defaultController.me;
 export const changePassword = defaultController.changePassword;
+export const signup = defaultController.signup;
+export const google = defaultController.google;

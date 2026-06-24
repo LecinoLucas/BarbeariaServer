@@ -88,6 +88,22 @@ export function findByEmailIgnoringId(email, id) {
   });
 }
 
+export function listByIds(ids) {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return [];
+  }
+
+  return prisma.user.findMany({
+    where: {
+      id: {
+        in: ids,
+      },
+      deletedAt: null,
+    },
+    select: safeUserSelect,
+  });
+}
+
 export function list(filters) {
   return prisma.user.findMany({
     where: buildListWhere(filters),

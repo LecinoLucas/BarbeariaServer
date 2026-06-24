@@ -22,6 +22,46 @@ const changePasswordSchema = z.object({
     .min(6, "A nova senha deve ter no mínimo 6 caracteres."),
 });
 
+const signupSchema = z
+  .object({
+    name: z
+      .string({ required_error: "Nome é obrigatório." })
+      .trim()
+      .min(1, "Nome é obrigatório."),
+    phone: z
+      .string({ required_error: "Telefone é obrigatório." })
+      .trim()
+      .min(1, "Telefone é obrigatório."),
+    email: z
+      .string({ required_error: "Email é obrigatório." })
+      .trim()
+      .min(1, "Email é obrigatório.")
+      .email("Email inválido.")
+      .transform((value) => value.toLowerCase()),
+    password: z
+      .string({ required_error: "Senha é obrigatória." })
+      .min(6, "A senha deve ter no mínimo 6 caracteres."),
+    confirmPassword: z
+      .string({ required_error: "Confirmação de senha é obrigatória." })
+      .min(6, "A confirmação de senha deve ter no mínimo 6 caracteres."),
+  })
+  .superRefine((value, ctx) => {
+    if (value.password !== value.confirmPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["confirmPassword"],
+        message: "A confirmação de senha deve ser igual à senha.",
+      });
+    }
+  });
+
+const googleSchema = z.object({
+  credential: z
+    .string({ required_error: "Credencial do Google é obrigatória." })
+    .trim()
+    .min(1, "Credencial do Google é obrigatória."),
+});
+
 function parseOrThrow(schema, payload) {
   const result = schema.safeParse(payload);
 
@@ -38,4 +78,12 @@ export function validateClientAuthLogin(payload) {
 
 export function validateClientAuthPassword(payload) {
   return parseOrThrow(changePasswordSchema, payload);
+}
+
+export function validateClientAuthSignup(payload) {
+  return parseOrThrow(signupSchema, payload);
+}
+
+export function validateClientAuthGoogle(payload) {
+  return parseOrThrow(googleSchema, payload);
 }

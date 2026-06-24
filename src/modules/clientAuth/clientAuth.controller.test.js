@@ -269,3 +269,189 @@ test("getClientRefreshTokenCookieOptions usa cookie separado do auth principal",
   assert.equal(options.sameSite, "strict");
   assert.equal(options.path, "/api/client-auth");
 });
+
+test("signup com login automático seta clientRefreshToken e não retorna passwordHash", async () => {
+  const controller = createClientAuthController({
+    async signup() {
+      return {
+        requiresAdminApproval: false,
+        accessToken: "access-token",
+        refreshToken: "refresh-token",
+        user: { id: "user-1", email: "novo@alphamen.com", role: ROLES.CLIENT },
+        client: { id: "client-1", name: "Novo Cliente", status: "ACTIVE" },
+      };
+    },
+  });
+  const res = createResponseDouble();
+
+  await controller.signup(
+    {
+      body: {
+        name: "Novo Cliente",
+        phone: "(62) 99999-0000",
+        email: "novo@alphamen.com",
+        password: "secret123",
+        confirmPassword: "secret123",
+      },
+    },
+    res,
+    (error) => {
+      throw error;
+    },
+  );
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.cookieCalls.length, 1);
+  assert.equal(res.body.data.accessToken, "access-token");
+  assert.equal("passwordHash" in res.body.data.user, false);
+});
+
+test("signup com aprovação obrigatória não seta cookie e retorna mensagem amigável", async () => {
+  const controller = createClientAuthController({
+    async signup() {
+      return {
+        requiresAdminApproval: true,
+        message: "Cadastro recebido. Aguarde aprovação da barbearia.",
+      };
+    },
+  });
+  const res = createResponseDouble();
+
+  await controller.signup(
+    {
+      body: {
+        name: "Novo Cliente",
+        phone: "(62) 99999-0000",
+        email: "novo@alphamen.com",
+        password: "secret123",
+        confirmPassword: "secret123",
+      },
+    },
+    res,
+    (error) => {
+      throw error;
+    },
+  );
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.cookieCalls.length, 0);
+  assert.deepEqual(res.body.data, { requiresAdminApproval: true });
+  assert.equal(res.body.message, "Cadastro recebido. Aguarde aprovação da barbearia.");
+});
+
+test("signup valida telefone obrigatório", async () => {
+  const controller = createClientAuthController({
+    async signup() {
+      throw new Error("não deveria chamar o service");
+    },
+  });
+  const res = createResponseDouble();
+
+  await controller.signup(
+    {
+      body: {
+        name: "Novo Cliente",
+        phone: "",
+        email: "novo@alphamen.com",
+        password: "secret123",
+        confirmPassword: "secret123",
+      },
+    },
+    res,
+    (error) => {
+      assert.equal(error?.code, "VALIDATION_ERROR");
+    },
+  );
+});
+
+test("signup valida confirmação de senha diferente", async () => {
+  const controller = createClientAuthController({
+    async signup() {
+      throw new Error("não deveria chamar o service");
+    },
+  });
+  const res = createResponseDouble();
+
+  await controller.signup(
+    {
+      body: {
+        name: "Novo Cliente",
+        phone: "(62) 99999-0000",
+        email: "novo@alphamen.com",
+        password: "secret123",
+        confirmPassword: "secret999",
+      },
+    },
+    res,
+    (error) => {
+      assert.equal(error?.code, "VALIDATION_ERROR");
+    },
+  );
+});
+
+test("google com login automático seta clientRefreshToken", async () => {
+  const controller = createClientAuthController({
+    async loginWithGoogle() {
+      return {
+        requiresAdminApproval: false,
+        accessToken: "access-token",
+        refreshToken: "refresh-token",
+        user: { id: "user-1", email: "google@alphamen.com", role: ROLES.CLIENT },
+        client: { id: "client-1", name: "Cliente Google", status: "ACTIVE" },
+      };
+    },
+  });
+  const res = createResponseDouble();
+
+  await controller.google(
+    { body: { credential: "google-token" } },
+    res,
+    (error) => {
+      throw error;
+    },
+  );
+
+  assert.equal(res.cookieCalls.length, 1);
+  assert.equal(res.cookieCalls[0].name, CLIENT_REFRESH_TOKEN_COOKIE_NAME);
+  assert.equal(res.body.data.accessToken, "access-token");
+});
+
+test("google pendente não seta cookie e retorna mensagem amigável", async () => {
+  const controller = createClientAuthController({
+    async loginWithGoogle() {
+      return {
+        requiresAdminApproval: true,
+        message: "Cadastro recebido. Aguarde aprovação da barbearia.",
+      };
+    },
+  });
+  const res = createResponseDouble();
+
+  await controller.google(
+    { body: { credential: "google-token" } },
+    res,
+    (error) => {
+      throw error;
+    },
+  );
+
+  assert.equal(res.cookieCalls.length, 0);
+  assert.deepEqual(res.body.data, { requiresAdminApproval: true });
+});
+
+test("google valida credential obrigatória", async () => {
+  const controller = createClientAuthController({
+    async loginWithGoogle() {
+      throw new Error("não deveria chamar o service");
+    },
+  });
+  const res = createResponseDouble();
+
+  await controller.google(
+    { body: { credential: "" } },
+    res,
+    (error) => {
+      assert.equal(error?.code, "VALIDATION_ERROR");
+    },
+  );
+});
