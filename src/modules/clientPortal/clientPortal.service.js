@@ -11,6 +11,11 @@ import {
 } from "../../socket/socket.emitter.js";
 import { SOCKET_EVENTS } from "../../socket/socket.events.js";
 import {
+  buildAppointmentCanceledMessage,
+  buildAppointmentNotificationMetadata,
+  buildAppointmentRescheduledMessage,
+} from "../../utils/appointmentNotificationFormatter.js";
+import {
   cancelReminderForAppointment,
   recalculateReminderForAppointment,
 } from "../appointmentReminders/appointmentReminder.service.js";
@@ -387,12 +392,11 @@ export async function cancelOwnAppointment(appointmentId, userId) {
 
   await createAdminNotifications({
     title: "Agendamento cancelado",
-    message: `${client.name} cancelou um agendamento.`,
+    message: buildAppointmentCanceledMessage(client.name, updatedAppointment),
     type: NOTIFICATION_TYPES.APPOINTMENT_CANCELED,
-    metadata: {
-      appointmentId: updatedAppointment.id,
+    metadata: buildAppointmentNotificationMetadata(updatedAppointment, {
       clientId: client.id,
-    },
+    }),
   });
 
   emitToAdmins(
@@ -434,14 +438,12 @@ export async function rescheduleOwnAppointment(appointmentId, payload, userId) {
 
   await createAdminNotifications({
     title: "Agendamento reagendado",
-    message: `${client.name} reagendou um agendamento.`,
+    message: buildAppointmentRescheduledMessage(client.name, updatedAppointment),
     type: NOTIFICATION_TYPES.APPOINTMENT_UPDATED,
-    metadata: {
-      appointmentId: updatedAppointment.id,
+    metadata: buildAppointmentNotificationMetadata(updatedAppointment, {
       clientId: client.id,
-      startAt: updatedAppointment.startAt,
       endAt: updatedAppointment.endAt,
-    },
+    }),
   });
 
   emitToAdmins(

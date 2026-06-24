@@ -6,6 +6,10 @@ import {
 } from "../../socket/socket.emitter.js";
 import { SOCKET_EVENTS } from "../../socket/socket.events.js";
 import {
+  buildAppointmentNotificationMetadata,
+  buildAppointmentReminderMessage,
+} from "../../utils/appointmentNotificationFormatter.js";
+import {
   createNotification,
   findAdmins,
   findExistingReminderNotification,
@@ -27,17 +31,11 @@ function getReminderMinutes(setting) {
 }
 
 function buildReminderPayload(appointment) {
-  return {
-    appointmentId: appointment.id,
-    clientId: appointment.clientId,
-    professionalId: appointment.professionalId,
-    serviceId: appointment.serviceId,
-    startAt: appointment.startAt,
-  };
+  return buildAppointmentNotificationMetadata(appointment);
 }
 
-function buildReminderMessage(appointment) {
-  return `O agendamento de ${appointment.client.name} começa em breve.`;
+function buildReminderMessage(appointment, minutes) {
+  return buildAppointmentReminderMessage(appointment, minutes);
 }
 
 function buildReminderEventPayload(appointment, minutes) {
@@ -101,9 +99,12 @@ export async function processAppointmentReminders() {
       const notification = await createNotification({
         userId: admin.id,
         title: "Agendamento próximo",
-        message: buildReminderMessage(appointment),
+        message: buildReminderMessage(appointment, minutes),
         type: NOTIFICATION_TYPES.APPOINTMENT_REMINDER,
-        metadata: buildReminderPayload(appointment),
+        metadata: {
+          ...buildReminderPayload(appointment),
+          minutes,
+        },
       });
 
       emitNotificationToUser(admin.id, notification);

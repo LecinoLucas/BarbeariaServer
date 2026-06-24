@@ -56,6 +56,10 @@ import {
   getBusinessDateKeyFromUtc,
   getWeekdayInBusinessZone,
 } from "../../utils/agendaTimezone.js";
+import {
+  buildAppointmentCreatedMessage,
+  buildAppointmentNotificationMetadata,
+} from "../../utils/appointmentNotificationFormatter.js";
 
 const NOT_FOUND_MESSAGE = "Agendamento não encontrado.";
 const ACCESS_DENIED_MESSAGE = "Acesso negado.";
@@ -482,22 +486,11 @@ export async function createAppointment(payload, actor) {
 
   await createReminderForAppointment(appointment);
 
-  const timeFormatted = new Intl.DateTimeFormat("pt-BR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: AGENDA_TIME_ZONE,
-  }).format(new Date(appointment.startAt));
-
   await createNotificationsForAdmins({
     title: "Novo agendamento",
-    message: "Um novo agendamento foi criado.",
+    message: buildAppointmentCreatedMessage(appointment),
     type: NOTIFICATION_TYPES.APPOINTMENT_CREATED,
-    metadata: {
-      appointmentId: appointment.id,
-      clientName: appointment.client?.name,
-      professionalName: appointment.professional?.name,
-      time: timeFormatted,
-    },
+    metadata: buildAppointmentNotificationMetadata(appointment),
   });
 
   emitToAdmins(SOCKET_EVENTS.APPOINTMENT_CREATED, toAppointmentEventPayload(appointment));

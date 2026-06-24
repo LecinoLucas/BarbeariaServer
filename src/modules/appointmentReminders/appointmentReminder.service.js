@@ -10,6 +10,10 @@ import { ForbiddenError } from "../../errors/ForbiddenError.js";
 import { emitNotificationToUser } from "../../socket/socket.emitter.js";
 import { createEmailProvider } from "../../providers/email/emailProviderFactory.js";
 import { EmailProviderError } from "../../providers/email/emailProvider.js";
+import {
+  buildAppointmentNotificationMetadata,
+  buildAppointmentReminderMessage,
+} from "../../utils/appointmentNotificationFormatter.js";
 import { getAppointmentReminderEmailRenderer } from "../reminderTemplates/reminderTemplate.service.js";
 import {
   cancelOutdatedReminders,
@@ -86,21 +90,20 @@ function sanitizeErrorMessage(error) {
 }
 
 function buildInAppMessage(reminder, minutes) {
-  const clientName = reminder.appointment?.client?.name ?? "um cliente";
-
-  return `O atendimento de ${clientName} começa em ${minutes} minuto(s).`;
+  return buildAppointmentReminderMessage(reminder.appointment, minutes);
 }
 
 function buildNotificationPayload(reminder) {
   return {
+    ...buildAppointmentNotificationMetadata(reminder.appointment, {
+      minutes:
+        reminder.appointment?.startAt && reminder.scheduledAt
+          ? Math.round((reminder.appointment.startAt.getTime() - reminder.scheduledAt.getTime()) / 60000)
+          : null,
+    }),
     reminderId: reminder.id,
-    appointmentId: reminder.appointment.id,
-    professionalId: reminder.appointment.professionalId,
-    clientId: reminder.appointment.clientId,
-    serviceId: reminder.appointment.serviceId,
     channel: reminder.channel,
     scheduledAt: reminder.scheduledAt,
-    startAt: reminder.appointment.startAt,
   };
 }
 
