@@ -103,232 +103,204 @@ export async function getAttendanceReceiptData(attendanceId, actor) {
 }
 
 export function renderAttendanceReceiptPdf({ attendance, settings, totals }) {
-  const doc = new PDFDocument({ size: "A4", margin: 52, autoFirstPage: true });
+  const doc = new PDFDocument({ size: "A4", margin: 50, autoFirstPage: true });
 
   const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const now = DateTime.now().setZone(TZ);
 
-  // ── Header ───────────────────────────────────────────────────────
+  // Design Tokens
+  const colors = {
+    primary: "#D4AF37", // Dourado
+    dark: "#111111", // Preto/Grafite
+    gray: "#666666",
+    lightGray: "#F9FAFB",
+    border: "#E5E7EB",
+  };
+
+  // Helpers de Layout
+  function ensureSpace(requiredHeight) {
+    if (doc.y + requiredHeight > doc.page.height - doc.page.margins.bottom) {
+      doc.addPage();
+    }
+  }
+
+  function drawLine(y) {
+    doc
+      .moveTo(doc.page.margins.left, y)
+      .lineTo(doc.page.margins.left + pageWidth, y)
+      .strokeColor(colors.border)
+      .lineWidth(1)
+      .stroke();
+  }
+
+  // ── HEADER ────────────────────────────────────────────────────────
   const shopName = settings.barbershopName || "ALPHAMEN BARBEARIA";
 
-  doc
-    .fontSize(22)
-    .font("Helvetica-Bold")
-    .text(shopName.toUpperCase(), { align: "center" });
-
-  doc
-    .fontSize(11)
-    .font("Helvetica")
-    .moveDown(0.3)
-    .text("Comprovante de Atendimento", { align: "center" });
-
+  doc.fontSize(24).font("Helvetica-Bold").fillColor(colors.dark).text(shopName.toUpperCase(), { align: "center" });
+  doc.fontSize(12).font("Helvetica").fillColor(colors.gray).moveDown(0.3).text("Comprovante de Atendimento", { align: "center" });
+  doc.moveDown(1);
+  drawLine(doc.y);
   doc.moveDown(0.8);
-  doc
-    .moveTo(doc.page.margins.left, doc.y)
-    .lineTo(doc.page.margins.left + pageWidth, doc.y)
-    .strokeColor("#cccccc")
-    .stroke();
-  doc.moveDown(0.6);
 
-  // ── Meta ─────────────────────────────────────────────────────────
+  // Meta badge
   const metaY = doc.y;
-  doc.fontSize(10).font("Helvetica-Bold").text(`Nº: #${attendance.id.slice(0, 8).toUpperCase()}`, { continued: false });
-  doc.fontSize(10).font("Helvetica").text(`Emitido em: ${now.toFormat("dd/MM/yyyy HH:mm")}`, { align: "right" });
-  doc.y = metaY + 22;
+  doc.fontSize(10).font("Helvetica-Bold").fillColor(colors.primary).text(`Comprovante #${attendance.id.slice(0, 8).toUpperCase()}`, doc.page.margins.left, metaY);
+  doc.fontSize(10).font("Helvetica").fillColor(colors.gray).text(`Emitido em: ${now.toFormat("dd/MM/yyyy HH:mm")}`, doc.page.margins.left, metaY, { align: "right", width: pageWidth });
+  doc.y = metaY + 25;
 
-  doc.moveDown(0.8);
+  // ── TOP CARDS (Lado a Lado) ───────────────────────────────────────
+  ensureSpace(100);
+  const cardsY = doc.y;
+  const cardWidth = (pageWidth - 20) / 2;
+  const leftX = doc.page.margins.left;
+  const rightX = leftX + cardWidth + 20;
 
-  // ── Barbearia ────────────────────────────────────────────────────
-  doc.fontSize(10).font("Helvetica-Bold").fillColor("#444444").text("BARBEARIA");
-  doc.fontSize(9).font("Helvetica").fillColor("#222222");
-
-  if (shopName) doc.text(shopName);
-  if (settings.phone) doc.text(`Tel: ${settings.phone}`);
-  if (settings.instagram) doc.text(`@${settings.instagram.replace(/^@/, "")}`);
+  // Bloco Barbearia
+  doc.fontSize(10).font("Helvetica-Bold").fillColor(colors.dark).text("Barbearia", leftX, cardsY);
+  doc.moveDown(0.3);
+  doc.fontSize(9).font("Helvetica").fillColor(colors.gray);
+  doc.text(shopName, leftX, doc.y, { width: cardWidth });
+  if (settings.phone) doc.text(`Tel: ${settings.phone}`, leftX, doc.y, { width: cardWidth });
+  if (settings.instagram) doc.text(`Instagram: @${settings.instagram.replace(/^@/, "")}`, leftX, doc.y, { width: cardWidth });
   const addressLine = buildAddressLine(settings.address ?? {});
-  if (addressLine) doc.text(addressLine);
+  if (addressLine) doc.text(`Endereço: ${addressLine}`, leftX, doc.y, { width: cardWidth });
 
-  doc.moveDown(0.8);
+  const leftMaxY = doc.y;
 
-  // ── Cliente ──────────────────────────────────────────────────────
-  doc.fontSize(10).font("Helvetica-Bold").fillColor("#444444").text("CLIENTE");
-  doc.fontSize(9).font("Helvetica").fillColor("#222222");
-
-  doc.text(`Nome: ${attendance.client?.name || "—"}`);
-  if (attendance.client?.phone) doc.text(`Tel: ${attendance.client.phone}`);
-  doc.text(`Profissional: ${attendance.professional?.name || "—"}`);
-  doc.text(`Data/Hora: ${formatDateBrt(attendance.startedAt)}`);
-  if (attendance.finishedAt) doc.text(`Finalização: ${formatDateBrt(attendance.finishedAt)}`);
-
-  doc.moveDown(0.8);
-
-  // ── Serviços e itens ─────────────────────────────────────────────
-  const hasService = Boolean(attendance.appointment?.service);
-  const hasItems = attendance.items?.length > 0;
-
-  if (hasService || hasItems) {
-    doc.fontSize(10).font("Helvetica-Bold").fillColor("#444444").text("SERVIÇOS E ITENS");
-
-    doc
-      .moveTo(doc.page.margins.left, doc.y + 4)
-      .lineTo(doc.page.margins.left + pageWidth, doc.y + 4)
-      .strokeColor("#cccccc")
-      .stroke();
-    doc.moveDown(0.3);
-
-    // Header row
-    const col = {
-      desc: doc.page.margins.left,
-      qty: doc.page.margins.left + pageWidth * 0.52,
-      unit: doc.page.margins.left + pageWidth * 0.66,
-      total: doc.page.margins.left + pageWidth * 0.82,
-    };
-
-    doc.fontSize(8).font("Helvetica-Bold").fillColor("#555555");
-    doc.text("Descrição", col.desc, doc.y, { width: pageWidth * 0.5 });
-    doc.text("Qtd", col.qty, doc.y - doc.currentLineHeight(), { width: 40, align: "right" });
-    doc.text("Unit.", col.unit, doc.y - doc.currentLineHeight(), { width: 70, align: "right" });
-    doc.text("Total", col.total, doc.y - doc.currentLineHeight(), { width: pageWidth * 0.18, align: "right" });
-
-    doc.moveDown(0.2);
-    doc.font("Helvetica").fillColor("#222222");
-
-    function serviceRow(label, quantity, unitReais, totalReais) {
-      const rowY = doc.y;
-      doc.fontSize(9).text(label, col.desc, rowY, { width: pageWidth * 0.5 });
-      doc.text(String(quantity), col.qty, rowY, { width: 40, align: "right" });
-      doc.text(formatCurrencyBrl(unitReais), col.unit, rowY, { width: 70, align: "right" });
-      doc.text(formatCurrencyBrl(totalReais), col.total, rowY, { width: pageWidth * 0.18, align: "right" });
-      doc.moveDown(0.05);
-    }
-
-    if (hasService) {
-      const svc = attendance.appointment.service;
-      serviceRow(svc.name, 1, Number(svc.price), Number(svc.price));
-    }
-
-    for (const item of attendance.items ?? []) {
-      serviceRow(item.description || "Item", item.quantity, Number(item.unitPrice), Number(item.total));
-    }
-
-    doc.moveDown(0.4);
-  }
-
-  // ── Produtos ─────────────────────────────────────────────────────
-  const hasProducts = attendance.productItems?.length > 0;
-
-  if (hasProducts) {
-    doc.fontSize(10).font("Helvetica-Bold").fillColor("#444444").text("PRODUTOS VENDIDOS");
-
-    doc
-      .moveTo(doc.page.margins.left, doc.y + 4)
-      .lineTo(doc.page.margins.left + pageWidth, doc.y + 4)
-      .strokeColor("#cccccc")
-      .stroke();
-    doc.moveDown(0.3);
-
-    const col = {
-      desc: doc.page.margins.left,
-      qty: doc.page.margins.left + pageWidth * 0.52,
-      unit: doc.page.margins.left + pageWidth * 0.66,
-      total: doc.page.margins.left + pageWidth * 0.82,
-    };
-
-    doc.fontSize(8).font("Helvetica-Bold").fillColor("#555555");
-    doc.text("Descrição", col.desc, doc.y, { width: pageWidth * 0.5 });
-    doc.text("Qtd", col.qty, doc.y - doc.currentLineHeight(), { width: 40, align: "right" });
-    doc.text("Unit.", col.unit, doc.y - doc.currentLineHeight(), { width: 70, align: "right" });
-    doc.text("Total", col.total, doc.y - doc.currentLineHeight(), { width: pageWidth * 0.18, align: "right" });
-
-    doc.moveDown(0.2);
-    doc.font("Helvetica").fillColor("#222222");
-
-    for (const item of attendance.productItems) {
-      const rowY = doc.y;
-      doc.fontSize(9).text(item.productNameSnapshot || "Produto", col.desc, rowY, { width: pageWidth * 0.5 });
-      doc.text(String(item.quantity), col.qty, rowY, { width: 40, align: "right" });
-      doc.text(formatCurrencyBrl(item.unitPriceCents / 100), col.unit, rowY, { width: 70, align: "right" });
-      doc.text(formatCurrencyBrl(item.totalPriceCents / 100), col.total, rowY, { width: pageWidth * 0.18, align: "right" });
-      doc.moveDown(0.05);
-    }
-
-    doc.moveDown(0.4);
-  }
-
-  // ── Totais ───────────────────────────────────────────────────────
-  doc
-    .moveTo(doc.page.margins.left, doc.y)
-    .lineTo(doc.page.margins.left + pageWidth, doc.y)
-    .strokeColor("#cccccc")
-    .stroke();
-  doc.moveDown(0.6);
-
-  doc.fontSize(10).font("Helvetica-Bold").fillColor("#444444").text("RESUMO");
+  // Bloco Cliente/Atendimento
+  doc.fontSize(10).font("Helvetica-Bold").fillColor(colors.dark).text("Cliente / Atendimento", rightX, cardsY);
   doc.moveDown(0.3);
+  doc.fontSize(9).font("Helvetica").fillColor(colors.gray);
+  doc.text(`Cliente: ${attendance.client?.name || "—"}`, rightX, doc.y, { width: cardWidth });
+  if (attendance.client?.phone) doc.text(`Tel: ${attendance.client.phone}`, rightX, doc.y, { width: cardWidth });
+  doc.moveDown(0.3);
+  doc.text(`Profissional: ${attendance.professional?.name || "—"}`, rightX, doc.y, { width: cardWidth });
+  doc.text(`Início: ${formatDateBrt(attendance.startedAt)}`, rightX, doc.y, { width: cardWidth });
+  if (attendance.finishedAt) doc.text(`Fim: ${formatDateBrt(attendance.finishedAt)}`, rightX, doc.y, { width: cardWidth });
 
-  function summaryRow(label, valueReais, bold = false) {
-    const rowY = doc.y;
-    const font = bold ? "Helvetica-Bold" : "Helvetica";
-    const color = bold ? "#111111" : "#333333";
-    doc.fontSize(9).font(font).fillColor(color).text(label, doc.page.margins.left, rowY, { width: pageWidth * 0.7 });
-    doc.text(formatCurrencyBrl(valueReais), doc.page.margins.left, rowY, { width: pageWidth, align: "right" });
-    doc.moveDown(0.1);
+  const rightMaxY = doc.y;
+  doc.y = Math.max(leftMaxY, rightMaxY) + 25;
+
+  // ── TABELAS DE ITENS ─────────────────────────────────────────────
+
+  function renderTableHeader(title) {
+    ensureSpace(50);
+    doc.fontSize(11).font("Helvetica-Bold").fillColor(colors.primary).text(title.toUpperCase());
+    doc.moveDown(0.5);
+
+    // Header Row Background
+    doc.rect(doc.page.margins.left, doc.y, pageWidth, 20).fill(colors.lightGray);
+
+    const colY = doc.y + 6;
+    doc.fontSize(8).font("Helvetica-Bold").fillColor(colors.gray);
+    doc.text("Descrição", doc.page.margins.left + 10, colY, { width: pageWidth * 0.5 });
+    doc.text("Qtd", doc.page.margins.left + pageWidth * 0.55, colY, { width: 30, align: "center" });
+    doc.text("Valor unit.", doc.page.margins.left + pageWidth * 0.65, colY, { width: 70, align: "right" });
+    doc.text("Total", doc.page.margins.left + pageWidth * 0.82, colY, { width: pageWidth * 0.18 - 10, align: "right" });
+
+    doc.y += 20;
   }
 
-  summaryRow("Serviços:", totals.serviceTotalCents / 100);
-  summaryRow("Serviços adicionais:", totals.itemsTotalCents / 100);
-  summaryRow("Produtos:", totals.productTotalCents / 100);
+  function renderTableRow(desc, qty, unit, total, isLast) {
+    ensureSpace(25);
+    const rowY = doc.y + 8;
+    doc.fontSize(9).font("Helvetica").fillColor(colors.dark);
+    doc.text(desc, doc.page.margins.left + 10, rowY, { width: pageWidth * 0.5 });
+    doc.text(String(qty), doc.page.margins.left + pageWidth * 0.55, rowY, { width: 30, align: "center" });
+    doc.text(formatCurrencyBrl(unit), doc.page.margins.left + pageWidth * 0.65, rowY, { width: 70, align: "right" });
+    doc.text(formatCurrencyBrl(total), doc.page.margins.left + pageWidth * 0.82, rowY, { width: pageWidth * 0.18 - 10, align: "right" });
 
-  doc.moveDown(0.2);
-  doc
-    .moveTo(doc.page.margins.left + pageWidth * 0.4, doc.y)
-    .lineTo(doc.page.margins.left + pageWidth, doc.y)
-    .strokeColor("#aaaaaa")
-    .stroke();
-  doc.moveDown(0.3);
+    doc.y += 24;
+    if (!isLast) {
+      drawLine(doc.y);
+    }
+  }
 
-  summaryRow("TOTAL:", totals.grandTotalCents / 100, true);
+  // A) Serviço Principal
+  if (attendance.appointment?.service) {
+    renderTableHeader("Serviço principal");
+    const svc = attendance.appointment.service;
+    renderTableRow(svc.name, 1, Number(svc.price), Number(svc.price), true);
+    doc.moveDown(1.5);
+  }
 
-  doc.moveDown(0.6);
+  // B) Serviços Adicionais
+  if (attendance.items?.length > 0) {
+    renderTableHeader("Serviços adicionais");
+    attendance.items.forEach((item, idx) => {
+      renderTableRow(item.description || "Adicional", item.quantity, Number(item.unitPrice), Number(item.total), idx === attendance.items.length - 1);
+    });
+    doc.moveDown(1.5);
+  }
 
-  // ── Pagamento ────────────────────────────────────────────────────
+  // C) Produtos Vendidos
+  if (attendance.productItems?.length > 0) {
+    renderTableHeader("Produtos vendidos");
+    attendance.productItems.forEach((item, idx) => {
+      renderTableRow(item.productNameSnapshot || "Produto", item.quantity, item.unitPriceCents / 100, item.totalPriceCents / 100, idx === attendance.productItems.length - 1);
+    });
+    doc.moveDown(1.5);
+  }
+
+  // ── RESUMO FINANCEIRO E PAGAMENTO (Lado a Lado) ──────────────────
+  ensureSpace(120);
+  const bottomY = doc.y;
+
+  // Pagamento (Esquerda)
+  doc.fontSize(10).font("Helvetica-Bold").fillColor(colors.dark).text("PAGAMENTO", leftX, bottomY);
+  doc.moveDown(0.5);
+  doc.fontSize(9).font("Helvetica").fillColor(colors.gray);
+
   const payment = attendance.payment;
-  doc.fontSize(10).font("Helvetica-Bold").fillColor("#444444").text("PAGAMENTO");
-  doc.moveDown(0.3);
-
-  doc.fontSize(9).font("Helvetica").fillColor("#222222");
-  doc.text(`Status: ${paymentStatusLabel(payment?.status)}`);
+  doc.text(`Status: ${paymentStatusLabel(payment?.status)}`, leftX, doc.y, { width: cardWidth });
   if (payment?.paymentMethod || payment?.paymentMethodConfig) {
-    doc.text(`Forma: ${paymentMethodLabel(payment)}`);
+    doc.text(`Forma: ${paymentMethodLabel(payment)}`, leftX, doc.y, { width: cardWidth });
   }
   if (payment?.paidAt) {
-    doc.text(`Pago em: ${formatDateBrt(payment.paidAt)}`);
+    doc.text(`Pago em: ${formatDateBrt(payment.paidAt)}`, leftX, doc.y, { width: cardWidth });
   }
 
-  // ── Rodapé ───────────────────────────────────────────────────────
-  doc.moveDown(1.5);
-  doc
-    .moveTo(doc.page.margins.left, doc.y)
-    .lineTo(doc.page.margins.left + pageWidth, doc.y)
-    .strokeColor("#cccccc")
-    .stroke();
-  doc.moveDown(0.6);
+  const payMaxY = doc.y;
 
-  doc
-    .fontSize(9)
-    .font("Helvetica-Bold")
-    .fillColor("#333333")
-    .text("Obrigado pela preferência!", { align: "center" });
+  // Resumo (Direita)
+  doc.fontSize(10).font("Helvetica-Bold").fillColor(colors.dark).text("RESUMO", rightX, bottomY);
+  doc.moveDown(0.5);
 
-  doc.moveDown(0.4);
-  doc
-    .fontSize(8)
-    .font("Helvetica")
-    .fillColor("#888888")
-    .text("Este comprovante não substitui documento fiscal.", { align: "center" });
+  let summaryY = doc.y;
+  function addSummaryLine(label, value, isBold = false) {
+    doc.fontSize(9)
+       .font(isBold ? "Helvetica-Bold" : "Helvetica")
+       .fillColor(isBold ? colors.dark : colors.gray)
+       .text(label, rightX, summaryY, { width: cardWidth * 0.6 });
 
-  doc.moveDown(0.3);
-  doc.text(`Emitido em: ${now.toFormat("dd/MM/yyyy HH:mm")} (horário de Brasília)`, { align: "center" });
+    doc.text(formatCurrencyBrl(value), rightX + cardWidth * 0.6, summaryY, { width: cardWidth * 0.4, align: "right" });
+    summaryY += 14;
+  }
+
+  if (totals.serviceTotalCents > 0) addSummaryLine("Serviço principal:", totals.serviceTotalCents / 100);
+  if (totals.itemsTotalCents > 0) addSummaryLine("Serviços adicionais:", totals.itemsTotalCents / 100);
+  if (totals.productTotalCents > 0) addSummaryLine("Produtos:", totals.productTotalCents / 100);
+
+  summaryY += 4;
+  doc.moveTo(rightX, summaryY).lineTo(rightX + cardWidth, summaryY).strokeColor(colors.border).lineWidth(1).stroke();
+  summaryY += 8;
+
+  addSummaryLine("TOTAL", totals.grandTotalCents / 100, true);
+
+  doc.y = Math.max(payMaxY, summaryY) + 40;
+
+  // ── RODAPÉ ───────────────────────────────────────────────────────
+  ensureSpace(60);
+  // O rodapé idealmente fica bem lá no fundo, mas pode ficar após o conteúdo
+  const footerY = Math.max(doc.y, doc.page.height - doc.page.margins.bottom - 60);
+
+  drawLine(footerY);
+  doc.y = footerY + 15;
+  doc.fontSize(9).font("Helvetica-Bold").fillColor(colors.dark).text("Obrigado pela preferência!", { align: "center" });
+  doc.moveDown(0.2);
+  doc.fontSize(8).font("Helvetica").fillColor(colors.gray).text("Este comprovante não substitui documento fiscal.", { align: "center" });
+  doc.moveDown(0.2);
+  doc.fontSize(8).font("Helvetica").fillColor(colors.gray).text(`Emitido pelo sistema Alphamen Barbearia em ${TZ}.`, { align: "center" });
 
   return doc;
 }

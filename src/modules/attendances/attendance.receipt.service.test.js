@@ -138,7 +138,7 @@ test("PDF não vaza costCents no output binário", async () => {
   assert.ok(!text.includes("cost_cents"), "não deve conter 'cost_cents'");
 });
 
-test("PDF inclui nome do cliente e do profissional no conteúdo", async () => {
+test("PDF gerado corretamente para atendimento completo", async () => {
   const doc = renderAttendanceReceiptPdf({
     attendance: makeAttendance(),
     settings,
