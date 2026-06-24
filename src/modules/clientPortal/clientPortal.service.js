@@ -16,10 +16,16 @@ import {
   buildAppointmentRescheduledMessage,
 } from "../../utils/appointmentNotificationFormatter.js";
 import {
+  getBusinessDateKeyFromUtc,
+  getBusinessTimeFromUtc,
+} from "../../utils/agendaTimezone.js";
+import {
   cancelReminderForAppointment,
   recalculateReminderForAppointment,
 } from "../appointmentReminders/appointmentReminder.service.js";
 import {
+  countAllAppointments,
+  countAllFinishedAttendances,
   countAppointments,
   countAttendances,
   countFinishedAttendancesByPeriod,
@@ -33,14 +39,12 @@ import {
   findConflictingAppointment,
   findConflictingScheduleBlock,
   findServiceById,
-  getFavoriteProfessional,
-  getFavoriteService,
   getLastAttendance,
   getNextAppointment,
   getSettingByKey,
   listAppointments,
   listAttendances,
-  sumPaidPaymentsByPeriod,
+  listRecentAttendances,
   updateAppointmentDate,
   updateAppointmentStatus,
   updateClientProfile,
@@ -66,10 +70,6 @@ function normalizeEmail(email) {
   return email ? email.trim().toLowerCase() : null;
 }
 
-function roundToTwo(value) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
-
 function calcEndAt(startAt, durationMinutes) {
   return new Date(startAt.getTime() + durationMinutes * 60 * 1000);
 }
@@ -77,14 +77,10 @@ function calcEndAt(startAt, durationMinutes) {
 function getDateRanges(now) {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const startOfYear = new Date(now.getFullYear(), 0, 1);
-  const endOfYear = new Date(now.getFullYear() + 1, 0, 1);
 
   return {
     startOfMonth,
     endOfMonth,
-    startOfYear,
-    endOfYear,
   };
 }
 
@@ -273,52 +269,70 @@ async function createAdminNotifications(payload) {
   );
 }
 
+function formatAttendanceForDashboard(attendance) {
+  const date = getBusinessDateKeyFromUtc(attendance.startedAt);
+  const time = getBusinessTimeFromUtc(attendance.startedAt);
+  const services =
+    attendance.items.length > 0
+      ? attendance.items.map((item) => item.service.name)
+      : attendance.appointment?.service?.name
+        ? [attendance.appointment.service.name]
+        : [];
+
+  return {
+    id: attendance.appointmentId ?? attendance.id,
+    date,
+    time,
+    professionalName: attendance.professional?.name ?? null,
+    services,
+    status: attendance.status,
+  };
+}
+
+function formatAppointmentForDashboard(appointment) {
+  const date = getBusinessDateKeyFromUtc(appointment.startAt);
+  const time = getBusinessTimeFromUtc(appointment.startAt);
+
+  return {
+    id: appointment.id,
+    date,
+    time,
+    professionalName: appointment.professional?.name ?? null,
+    services: appointment.service?.name ? [appointment.service.name] : [],
+    status: appointment.status,
+  };
+}
+
 export async function getClientDashboard(userId) {
   const client = await ensureClientProfile(userId);
   const now = new Date();
-  const { startOfMonth, endOfMonth, startOfYear, endOfYear } = getDateRanges(now);
+  const { startOfMonth, endOfMonth } = getDateRanges(now);
 
   const [
     nextAppointment,
     lastAttendance,
-    cutsThisMonth,
-    cutsThisYear,
-    spentThisMonth,
-    spentThisYear,
-    favoriteProfessional,
-    favoriteService,
+    appointmentsThisMonth,
+    totalAppointments,
+    completedAppointments,
+    recentHistory,
   ] = await Promise.all([
     getNextAppointment(client.id, now),
     getLastAttendance(client.id),
     countFinishedAttendancesByPeriod(client.id, startOfMonth, endOfMonth),
-    countFinishedAttendancesByPeriod(client.id, startOfYear, endOfYear),
-    sumPaidPaymentsByPeriod(client.id, startOfMonth, endOfMonth),
-    sumPaidPaymentsByPeriod(client.id, startOfYear, endOfYear),
-    getFavoriteProfessional(client.id),
-    getFavoriteService(client.id),
+    countAllAppointments(client.id),
+    countAllFinishedAttendances(client.id),
+    listRecentAttendances(client.id, 5),
   ]);
 
   return {
-    nextAppointment,
-    lastAttendance,
-    cutsThisMonth,
-    cutsThisYear,
-    spentThisMonth: roundToTwo(spentThisMonth),
-    spentThisYear: roundToTwo(spentThisYear),
-    favoriteProfessional: favoriteProfessional
-      ? {
-          professionalId: favoriteProfessional.professionalId,
-          name: favoriteProfessional.name,
-          attendances: Number(favoriteProfessional.attendances ?? 0),
-        }
-      : null,
-    favoriteService: favoriteService
-      ? {
-          serviceId: favoriteService.serviceId,
-          name: favoriteService.name,
-          quantity: Number(favoriteService.quantity ?? 0),
-        }
-      : null,
+    summary: {
+      totalAppointments,
+      completedAppointments,
+      appointmentsThisMonth,
+    },
+    lastVisit: lastAttendance ? formatAttendanceForDashboard(lastAttendance) : null,
+    nextAppointment: nextAppointment ? formatAppointmentForDashboard(nextAppointment) : null,
+    recentHistory: recentHistory.slice(0, 5).map(formatAttendanceForDashboard),
   };
 }
 
