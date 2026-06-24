@@ -30,6 +30,36 @@ const GENERAL_KEYS = [
   "allow_client_cancel",
   "allow_client_reschedule",
   "receipt_template",
+  "client_portal_enabled",
+  "client_portal_self_signup_enabled",
+  "client_portal_require_admin_approval",
+  "client_portal_google_login_enabled",
+  "client_portal_booking_enabled",
+  "client_portal_cancel_enabled",
+  "client_portal_cancel_min_hours",
+  "client_portal_show_prices",
+  "client_portal_show_duration",
+  "client_portal_show_professional",
+  "client_portal_support_label",
+  "client_portal_support_url",
+  "client_portal_booking_success_message",
+  "client_portal_no_slots_message",
+  "client_portal_booking_min_hours_advance",
+  "client_portal_booking_max_days_ahead",
+  "client_portal_max_active_appointments",
+  "client_portal_notes_enabled",
+  "client_portal_notes_required",
+  "client_portal_booking_instruction",
+  "client_portal_dashboard_show_last_visit",
+  "client_portal_dashboard_show_total_appointments",
+  "client_portal_dashboard_show_month_count",
+  "client_portal_dashboard_show_next_appointment",
+  "client_portal_dashboard_show_recent_history",
+  "client_portal_dashboard_history_limit",
+  "client_portal_appointments_show_history",
+  "client_portal_appointments_history_limit",
+  "client_portal_empty_dashboard_message",
+  "client_portal_empty_appointments_message",
 ];
 
 const GENERAL_DEFAULTS = {
@@ -53,6 +83,37 @@ const GENERAL_DEFAULTS = {
   allow_client_cancel: "true",
   allow_client_reschedule: "true",
   receipt_template: "classic",
+  client_portal_enabled: "true",
+  client_portal_self_signup_enabled: "true",
+  client_portal_require_admin_approval: "false",
+  client_portal_google_login_enabled: "false",
+  client_portal_booking_enabled: "true",
+  client_portal_cancel_enabled: "true",
+  client_portal_cancel_min_hours: "0",
+  client_portal_show_prices: "true",
+  client_portal_show_duration: "true",
+  client_portal_show_professional: "true",
+  client_portal_support_label: "Fale com a barbearia",
+  client_portal_support_url: "",
+  client_portal_booking_success_message: "Agendamento confirmado com sucesso.",
+  client_portal_no_slots_message:
+    "Não encontramos horários para essa combinação. Tente outro profissional ou data.",
+  client_portal_booking_min_hours_advance: "0",
+  client_portal_booking_max_days_ahead: "30",
+  client_portal_max_active_appointments: "1",
+  client_portal_notes_enabled: "true",
+  client_portal_notes_required: "false",
+  client_portal_booking_instruction: "Confira os dados antes de confirmar seu agendamento.",
+  client_portal_dashboard_show_last_visit: "true",
+  client_portal_dashboard_show_total_appointments: "true",
+  client_portal_dashboard_show_month_count: "true",
+  client_portal_dashboard_show_next_appointment: "true",
+  client_portal_dashboard_show_recent_history: "true",
+  client_portal_dashboard_history_limit: "5",
+  client_portal_appointments_show_history: "true",
+  client_portal_appointments_history_limit: "20",
+  client_portal_empty_dashboard_message: "Você ainda não possui histórico de agendamentos.",
+  client_portal_empty_appointments_message: "Você ainda não possui agendamentos.",
 };
 
 const LOGIN_APPEARANCE_KEYS = [
@@ -63,6 +124,40 @@ const LOGIN_APPEARANCE_KEYS = [
   "login_appearance_background_image_url",
   "login_appearance_background_image_alt",
 ];
+
+const CLIENT_PORTAL_DEFAULTS = {
+  enabled: true,
+  selfSignupEnabled: true,
+  requireAdminApproval: false,
+  googleLoginEnabled: false,
+  bookingEnabled: true,
+  cancelEnabled: true,
+  cancelMinHours: 0,
+  showPrices: true,
+  showDuration: true,
+  showProfessional: true,
+  supportLabel: "Fale com a barbearia",
+  supportUrl: "",
+  bookingSuccessMessage: "Agendamento confirmado com sucesso.",
+  noSlotsMessage:
+    "Não encontramos horários para essa combinação. Tente outro profissional ou data.",
+  bookingMinHoursAdvance: 0,
+  bookingMaxDaysAhead: 30,
+  maxActiveAppointments: 1,
+  notesEnabled: true,
+  notesRequired: false,
+  bookingInstruction: "Confira os dados antes de confirmar seu agendamento.",
+  dashboardShowLastVisit: true,
+  dashboardShowTotalAppointments: true,
+  dashboardShowMonthCount: true,
+  dashboardShowNextAppointment: true,
+  dashboardShowRecentHistory: true,
+  dashboardHistoryLimit: 5,
+  appointmentsShowHistory: true,
+  appointmentsHistoryLimit: 20,
+  emptyDashboardMessage: "Você ainda não possui histórico de agendamentos.",
+  emptyAppointmentsMessage: "Você ainda não possui agendamentos.",
+};
 
 export const LOGIN_APPEARANCE_DEFAULTS = {
   heroTitle: "ESTILO NÃO É MODA, É IDENTIDADE.",
@@ -134,6 +229,62 @@ function shapeSettings(map) {
     allowClientCancel: get("allow_client_cancel") === "true",
     allowClientReschedule: get("allow_client_reschedule") === "true",
     receiptTemplate: normalizeReceiptTemplate(get("receipt_template")),
+    clientPortalEnabled: get("client_portal_enabled") === "true",
+    clientPortalSelfSignupEnabled:
+      get("client_portal_self_signup_enabled") === "true",
+    clientPortalRequireAdminApproval:
+      get("client_portal_require_admin_approval") === "true",
+    clientPortalGoogleLoginEnabled:
+      get("client_portal_google_login_enabled") === "true",
+    clientPortalBookingEnabled: get("client_portal_booking_enabled") === "true",
+    clientPortalCancelEnabled: get("client_portal_cancel_enabled") === "true",
+    clientPortalCancelMinHours: parseInt(get("client_portal_cancel_min_hours"), 10),
+    clientPortalShowPrices: get("client_portal_show_prices") === "true",
+    clientPortalShowDuration: get("client_portal_show_duration") === "true",
+    clientPortalShowProfessional: get("client_portal_show_professional") === "true",
+    clientPortalSupportLabel: get("client_portal_support_label"),
+    clientPortalSupportUrl: getClientPortalSupportUrl(map),
+    clientPortalBookingSuccessMessage: get("client_portal_booking_success_message"),
+    clientPortalNoSlotsMessage: get("client_portal_no_slots_message"),
+    clientPortalBookingMinHoursAdvance: parseInt(
+      get("client_portal_booking_min_hours_advance"),
+      10,
+    ),
+    clientPortalBookingMaxDaysAhead: parseInt(
+      get("client_portal_booking_max_days_ahead"),
+      10,
+    ),
+    clientPortalMaxActiveAppointments: parseInt(
+      get("client_portal_max_active_appointments"),
+      10,
+    ),
+    clientPortalNotesEnabled: get("client_portal_notes_enabled") === "true",
+    clientPortalNotesRequired:
+      get("client_portal_notes_enabled") === "true" &&
+      get("client_portal_notes_required") === "true",
+    clientPortalBookingInstruction: get("client_portal_booking_instruction"),
+    clientPortalDashboardShowLastVisit:
+      get("client_portal_dashboard_show_last_visit") === "true",
+    clientPortalDashboardShowTotalAppointments:
+      get("client_portal_dashboard_show_total_appointments") === "true",
+    clientPortalDashboardShowMonthCount:
+      get("client_portal_dashboard_show_month_count") === "true",
+    clientPortalDashboardShowNextAppointment:
+      get("client_portal_dashboard_show_next_appointment") === "true",
+    clientPortalDashboardShowRecentHistory:
+      get("client_portal_dashboard_show_recent_history") === "true",
+    clientPortalDashboardHistoryLimit: parseInt(
+      get("client_portal_dashboard_history_limit"),
+      10,
+    ),
+    clientPortalAppointmentsShowHistory:
+      get("client_portal_appointments_show_history") === "true",
+    clientPortalAppointmentsHistoryLimit: parseInt(
+      get("client_portal_appointments_history_limit"),
+      10,
+    ),
+    clientPortalEmptyDashboardMessage: get("client_portal_empty_dashboard_message"),
+    clientPortalEmptyAppointmentsMessage: get("client_portal_empty_appointments_message"),
   };
 }
 
@@ -164,6 +315,123 @@ function toGeneralKeyValuePairs(payload) {
     {
       key: "receipt_template",
       value: normalizeReceiptTemplate(payload.receiptTemplate),
+    },
+    { key: "client_portal_enabled", value: String(payload.clientPortalEnabled) },
+    {
+      key: "client_portal_self_signup_enabled",
+      value: String(payload.clientPortalSelfSignupEnabled),
+    },
+    {
+      key: "client_portal_require_admin_approval",
+      value: String(payload.clientPortalRequireAdminApproval),
+    },
+    {
+      key: "client_portal_google_login_enabled",
+      value: String(payload.clientPortalGoogleLoginEnabled),
+    },
+    {
+      key: "client_portal_booking_enabled",
+      value: String(payload.clientPortalBookingEnabled),
+    },
+    {
+      key: "client_portal_cancel_enabled",
+      value: String(payload.clientPortalCancelEnabled),
+    },
+    {
+      key: "client_portal_cancel_min_hours",
+      value: String(payload.clientPortalCancelMinHours),
+    },
+    {
+      key: "client_portal_show_prices",
+      value: String(payload.clientPortalShowPrices),
+    },
+    {
+      key: "client_portal_show_duration",
+      value: String(payload.clientPortalShowDuration),
+    },
+    {
+      key: "client_portal_show_professional",
+      value: String(payload.clientPortalShowProfessional),
+    },
+    {
+      key: "client_portal_support_label",
+      value: payload.clientPortalSupportLabel,
+    },
+    {
+      key: "client_portal_support_url",
+      value: payload.clientPortalSupportUrl,
+    },
+    {
+      key: "client_portal_booking_success_message",
+      value: payload.clientPortalBookingSuccessMessage,
+    },
+    {
+      key: "client_portal_no_slots_message",
+      value: payload.clientPortalNoSlotsMessage,
+    },
+    {
+      key: "client_portal_booking_min_hours_advance",
+      value: String(payload.clientPortalBookingMinHoursAdvance),
+    },
+    {
+      key: "client_portal_booking_max_days_ahead",
+      value: String(payload.clientPortalBookingMaxDaysAhead),
+    },
+    {
+      key: "client_portal_max_active_appointments",
+      value: String(payload.clientPortalMaxActiveAppointments),
+    },
+    {
+      key: "client_portal_notes_enabled",
+      value: String(payload.clientPortalNotesEnabled),
+    },
+    {
+      key: "client_portal_notes_required",
+      value: String(payload.clientPortalNotesRequired),
+    },
+    {
+      key: "client_portal_booking_instruction",
+      value: payload.clientPortalBookingInstruction,
+    },
+    {
+      key: "client_portal_dashboard_show_last_visit",
+      value: String(payload.clientPortalDashboardShowLastVisit),
+    },
+    {
+      key: "client_portal_dashboard_show_total_appointments",
+      value: String(payload.clientPortalDashboardShowTotalAppointments),
+    },
+    {
+      key: "client_portal_dashboard_show_month_count",
+      value: String(payload.clientPortalDashboardShowMonthCount),
+    },
+    {
+      key: "client_portal_dashboard_show_next_appointment",
+      value: String(payload.clientPortalDashboardShowNextAppointment),
+    },
+    {
+      key: "client_portal_dashboard_show_recent_history",
+      value: String(payload.clientPortalDashboardShowRecentHistory),
+    },
+    {
+      key: "client_portal_dashboard_history_limit",
+      value: String(payload.clientPortalDashboardHistoryLimit),
+    },
+    {
+      key: "client_portal_appointments_show_history",
+      value: String(payload.clientPortalAppointmentsShowHistory),
+    },
+    {
+      key: "client_portal_appointments_history_limit",
+      value: String(payload.clientPortalAppointmentsHistoryLimit),
+    },
+    {
+      key: "client_portal_empty_dashboard_message",
+      value: payload.clientPortalEmptyDashboardMessage,
+    },
+    {
+      key: "client_portal_empty_appointments_message",
+      value: payload.clientPortalEmptyAppointmentsMessage,
     },
   ];
 }
@@ -245,6 +513,179 @@ function getPublicPortalString(map, key, fallback = null) {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : fallback;
+}
+
+function normalizeBooleanSetting(value, fallback) {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return fallback;
+}
+
+function normalizeIntegerSetting(value, fallback) {
+  const parsed = parseInt(value, 10);
+  return Number.isInteger(parsed) ? parsed : fallback;
+}
+
+function buildWhatsAppSupportUrl(whatsapp) {
+  if (typeof whatsapp !== "string") {
+    return "";
+  }
+
+  const digits = whatsapp.replace(/\D/g, "");
+  if (!digits) {
+    return "";
+  }
+
+  return `https://wa.me/${digits}`;
+}
+
+function getClientPortalSupportUrl(map) {
+  const explicit = map.client_portal_support_url?.trim();
+
+  if (explicit) {
+    return explicit;
+  }
+
+  return buildWhatsAppSupportUrl(map.barbershop_whatsapp ?? GENERAL_DEFAULTS.barbershop_whatsapp);
+}
+
+function shapeClientPortalSettings(map) {
+  return {
+    enabled: normalizeBooleanSetting(
+      map.client_portal_enabled,
+      CLIENT_PORTAL_DEFAULTS.enabled,
+    ),
+    selfSignupEnabled: normalizeBooleanSetting(
+      map.client_portal_self_signup_enabled,
+      CLIENT_PORTAL_DEFAULTS.selfSignupEnabled,
+    ),
+    requireAdminApproval: normalizeBooleanSetting(
+      map.client_portal_require_admin_approval,
+      CLIENT_PORTAL_DEFAULTS.requireAdminApproval,
+    ),
+    googleLoginEnabled: normalizeBooleanSetting(
+      map.client_portal_google_login_enabled,
+      CLIENT_PORTAL_DEFAULTS.googleLoginEnabled,
+    ),
+    bookingEnabled: normalizeBooleanSetting(
+      map.client_portal_booking_enabled,
+      CLIENT_PORTAL_DEFAULTS.bookingEnabled,
+    ),
+    cancelEnabled: normalizeBooleanSetting(
+      map.client_portal_cancel_enabled,
+      CLIENT_PORTAL_DEFAULTS.cancelEnabled,
+    ),
+    cancelMinHours: normalizeIntegerSetting(
+      map.client_portal_cancel_min_hours,
+      CLIENT_PORTAL_DEFAULTS.cancelMinHours,
+    ),
+    showPrices: normalizeBooleanSetting(
+      map.client_portal_show_prices,
+      CLIENT_PORTAL_DEFAULTS.showPrices,
+    ),
+    showDuration: normalizeBooleanSetting(
+      map.client_portal_show_duration,
+      CLIENT_PORTAL_DEFAULTS.showDuration,
+    ),
+    showProfessional: normalizeBooleanSetting(
+      map.client_portal_show_professional,
+      CLIENT_PORTAL_DEFAULTS.showProfessional,
+    ),
+    supportLabel:
+      getPublicPortalString(
+        map,
+        "client_portal_support_label",
+        CLIENT_PORTAL_DEFAULTS.supportLabel,
+      ) ?? CLIENT_PORTAL_DEFAULTS.supportLabel,
+    supportUrl: getClientPortalSupportUrl(map),
+    bookingSuccessMessage:
+      getPublicPortalString(
+        map,
+        "client_portal_booking_success_message",
+        CLIENT_PORTAL_DEFAULTS.bookingSuccessMessage,
+      ) ?? CLIENT_PORTAL_DEFAULTS.bookingSuccessMessage,
+    noSlotsMessage:
+      getPublicPortalString(
+        map,
+        "client_portal_no_slots_message",
+        CLIENT_PORTAL_DEFAULTS.noSlotsMessage,
+      ) ?? CLIENT_PORTAL_DEFAULTS.noSlotsMessage,
+    bookingMinHoursAdvance: normalizeIntegerSetting(
+      map.client_portal_booking_min_hours_advance,
+      CLIENT_PORTAL_DEFAULTS.bookingMinHoursAdvance,
+    ),
+    bookingMaxDaysAhead: normalizeIntegerSetting(
+      map.client_portal_booking_max_days_ahead,
+      CLIENT_PORTAL_DEFAULTS.bookingMaxDaysAhead,
+    ),
+    maxActiveAppointments: normalizeIntegerSetting(
+      map.client_portal_max_active_appointments,
+      CLIENT_PORTAL_DEFAULTS.maxActiveAppointments,
+    ),
+    notesEnabled: normalizeBooleanSetting(
+      map.client_portal_notes_enabled,
+      CLIENT_PORTAL_DEFAULTS.notesEnabled,
+    ),
+    notesRequired:
+      normalizeBooleanSetting(
+        map.client_portal_notes_enabled,
+        CLIENT_PORTAL_DEFAULTS.notesEnabled,
+      ) &&
+      normalizeBooleanSetting(
+        map.client_portal_notes_required,
+        CLIENT_PORTAL_DEFAULTS.notesRequired,
+      ),
+    bookingInstruction:
+      getPublicPortalString(
+        map,
+        "client_portal_booking_instruction",
+        CLIENT_PORTAL_DEFAULTS.bookingInstruction,
+      ) ?? CLIENT_PORTAL_DEFAULTS.bookingInstruction,
+    dashboardShowLastVisit: normalizeBooleanSetting(
+      map.client_portal_dashboard_show_last_visit,
+      CLIENT_PORTAL_DEFAULTS.dashboardShowLastVisit,
+    ),
+    dashboardShowTotalAppointments: normalizeBooleanSetting(
+      map.client_portal_dashboard_show_total_appointments,
+      CLIENT_PORTAL_DEFAULTS.dashboardShowTotalAppointments,
+    ),
+    dashboardShowMonthCount: normalizeBooleanSetting(
+      map.client_portal_dashboard_show_month_count,
+      CLIENT_PORTAL_DEFAULTS.dashboardShowMonthCount,
+    ),
+    dashboardShowNextAppointment: normalizeBooleanSetting(
+      map.client_portal_dashboard_show_next_appointment,
+      CLIENT_PORTAL_DEFAULTS.dashboardShowNextAppointment,
+    ),
+    dashboardShowRecentHistory: normalizeBooleanSetting(
+      map.client_portal_dashboard_show_recent_history,
+      CLIENT_PORTAL_DEFAULTS.dashboardShowRecentHistory,
+    ),
+    dashboardHistoryLimit: normalizeIntegerSetting(
+      map.client_portal_dashboard_history_limit,
+      CLIENT_PORTAL_DEFAULTS.dashboardHistoryLimit,
+    ),
+    appointmentsShowHistory: normalizeBooleanSetting(
+      map.client_portal_appointments_show_history,
+      CLIENT_PORTAL_DEFAULTS.appointmentsShowHistory,
+    ),
+    appointmentsHistoryLimit: normalizeIntegerSetting(
+      map.client_portal_appointments_history_limit,
+      CLIENT_PORTAL_DEFAULTS.appointmentsHistoryLimit,
+    ),
+    emptyDashboardMessage:
+      getPublicPortalString(
+        map,
+        "client_portal_empty_dashboard_message",
+        CLIENT_PORTAL_DEFAULTS.emptyDashboardMessage,
+      ) ?? CLIENT_PORTAL_DEFAULTS.emptyDashboardMessage,
+    emptyAppointmentsMessage:
+      getPublicPortalString(
+        map,
+        "client_portal_empty_appointments_message",
+        CLIENT_PORTAL_DEFAULTS.emptyAppointmentsMessage,
+      ) ?? CLIENT_PORTAL_DEFAULTS.emptyAppointmentsMessage,
+  };
 }
 
 function toLoginAppearanceKeyValuePairs(payload) {
@@ -427,6 +868,11 @@ export function createSettingsService(deps = {}) {
     return getLoginAppearance();
   }
 
+  async function getClientPortalSettings() {
+    const rows = await repository.getMany(GENERAL_KEYS);
+    return shapeClientPortalSettings(toSettingsMap(rows));
+  }
+
   async function getPublicPortalSettings() {
     const keys = [
       "public_portal_enabled",
@@ -496,6 +942,7 @@ export function createSettingsService(deps = {}) {
   return {
     getSettings,
     updateSettings,
+    getClientPortalSettings,
     getLoginAppearance,
     updateLoginAppearance,
     getPublicLoginAppearance,
@@ -511,6 +958,7 @@ const settingsService = createSettingsService();
 export const {
   getSettings,
   updateSettings,
+  getClientPortalSettings,
   getLoginAppearance,
   updateLoginAppearance,
   getPublicLoginAppearance,
@@ -520,4 +968,9 @@ export const {
   updatePublicPortalSettings,
 } = settingsService;
 
-export { MAX_BACKGROUND_IMAGE_SIZE_BYTES, publicAssetPrefix, storageRoot };
+export {
+  CLIENT_PORTAL_DEFAULTS,
+  MAX_BACKGROUND_IMAGE_SIZE_BYTES,
+  publicAssetPrefix,
+  storageRoot,
+};

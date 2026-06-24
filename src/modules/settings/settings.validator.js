@@ -38,6 +38,26 @@ function rejectUnsafeText(fieldLabel, maxLength, { required = false } = {}) {
   );
 }
 
+function optionalHttpUrl(fieldLabel, maxLength) {
+  return z
+    .string()
+    .trim()
+    .max(maxLength, `${fieldLabel} deve ter no máximo ${maxLength} caracteres.`)
+    .optional()
+    .nullable()
+    .transform((value) => {
+      if (typeof value !== "string") {
+        return null;
+      }
+
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    })
+    .refine((value) => !value || /^https?:\/\//i.test(value), {
+      message: `${fieldLabel} deve ser uma URL http(s) válida.`,
+    });
+}
+
 const internalAssetPathRegex = /^\/login-appearance-assets\/[a-z0-9][a-z0-9._-]*$/i;
 const externalHttpUrlSchema = z.string().url().refine((value) => /^https?:\/\//i.test(value), {
   message: "backgroundImageUrl deve ser uma URL http(s) válida.",
@@ -119,6 +139,144 @@ export const settingsSchema = z.object({
   allowClientCancel: z.boolean({ required_error: "allowClientCancel é obrigatório.", invalid_type_error: "allowClientCancel deve ser boolean." }),
   allowClientReschedule: z.boolean({ required_error: "allowClientReschedule é obrigatório.", invalid_type_error: "allowClientReschedule deve ser boolean." }),
 
+  clientPortalEnabled: z.boolean({
+    required_error: "clientPortalEnabled é obrigatório.",
+    invalid_type_error: "clientPortalEnabled deve ser boolean.",
+  }).optional().default(true),
+
+  clientPortalSelfSignupEnabled: z.boolean({
+    required_error: "clientPortalSelfSignupEnabled é obrigatório.",
+    invalid_type_error: "clientPortalSelfSignupEnabled deve ser boolean.",
+  }).optional().default(true),
+
+  clientPortalRequireAdminApproval: z.boolean({
+    required_error: "clientPortalRequireAdminApproval é obrigatório.",
+    invalid_type_error: "clientPortalRequireAdminApproval deve ser boolean.",
+  }).optional().default(false),
+
+  clientPortalGoogleLoginEnabled: z.boolean({
+    required_error: "clientPortalGoogleLoginEnabled é obrigatório.",
+    invalid_type_error: "clientPortalGoogleLoginEnabled deve ser boolean.",
+  }).optional().default(false),
+
+  clientPortalBookingEnabled: z.boolean({
+    required_error: "clientPortalBookingEnabled é obrigatório.",
+    invalid_type_error: "clientPortalBookingEnabled deve ser boolean.",
+  }).optional().default(true),
+
+  clientPortalCancelEnabled: z.boolean({
+    required_error: "clientPortalCancelEnabled é obrigatório.",
+    invalid_type_error: "clientPortalCancelEnabled deve ser boolean.",
+  }).optional().default(true),
+
+  clientPortalCancelMinHours: z
+    .number({
+      required_error: "clientPortalCancelMinHours é obrigatório.",
+      invalid_type_error: "clientPortalCancelMinHours inválido.",
+    })
+    .int()
+    .min(0, "clientPortalCancelMinHours não pode ser negativo.")
+    .max(720, "clientPortalCancelMinHours deve ser no máximo 720."),
+
+  clientPortalShowPrices: z.boolean({
+    required_error: "clientPortalShowPrices é obrigatório.",
+    invalid_type_error: "clientPortalShowPrices deve ser boolean.",
+  }).optional().default(true),
+
+  clientPortalShowDuration: z.boolean({
+    required_error: "clientPortalShowDuration é obrigatório.",
+    invalid_type_error: "clientPortalShowDuration deve ser boolean.",
+  }).optional().default(true),
+
+  clientPortalShowProfessional: z.boolean({
+    required_error: "clientPortalShowProfessional é obrigatório.",
+    invalid_type_error: "clientPortalShowProfessional deve ser boolean.",
+  }).optional().default(true),
+
+  clientPortalSupportLabel: rejectUnsafeText("Texto do suporte", 80, { required: true }),
+  clientPortalSupportUrl: optionalHttpUrl("Link do suporte", 500).transform((value) => value ?? ""),
+  clientPortalBookingSuccessMessage: rejectUnsafeText("Mensagem de sucesso", 240, { required: true }),
+  clientPortalNoSlotsMessage: rejectUnsafeText("Mensagem sem horários", 240, { required: true }),
+  clientPortalBookingMinHoursAdvance: z
+    .number({
+      required_error: "clientPortalBookingMinHoursAdvance é obrigatório.",
+      invalid_type_error: "clientPortalBookingMinHoursAdvance inválido.",
+    })
+    .int()
+    .min(0, "clientPortalBookingMinHoursAdvance não pode ser negativo.")
+    .max(720, "clientPortalBookingMinHoursAdvance deve ser no máximo 720."),
+  clientPortalBookingMaxDaysAhead: z
+    .number({
+      required_error: "clientPortalBookingMaxDaysAhead é obrigatório.",
+      invalid_type_error: "clientPortalBookingMaxDaysAhead inválido.",
+    })
+    .int()
+    .min(0, "clientPortalBookingMaxDaysAhead não pode ser negativo.")
+    .max(365, "clientPortalBookingMaxDaysAhead deve ser no máximo 365."),
+  clientPortalMaxActiveAppointments: z
+    .number({
+      required_error: "clientPortalMaxActiveAppointments é obrigatório.",
+      invalid_type_error: "clientPortalMaxActiveAppointments inválido.",
+    })
+    .int()
+    .min(1, "clientPortalMaxActiveAppointments deve ser pelo menos 1.")
+    .max(20, "clientPortalMaxActiveAppointments deve ser no máximo 20."),
+  clientPortalNotesEnabled: z.boolean({
+    required_error: "clientPortalNotesEnabled é obrigatório.",
+    invalid_type_error: "clientPortalNotesEnabled deve ser boolean.",
+  }).optional().default(true),
+  clientPortalNotesRequired: z.boolean({
+    required_error: "clientPortalNotesRequired é obrigatório.",
+    invalid_type_error: "clientPortalNotesRequired deve ser boolean.",
+  }).optional().default(false),
+  clientPortalBookingInstruction: rejectUnsafeText("Texto de instrução", 240, { required: true }),
+  clientPortalDashboardShowLastVisit: z.boolean({
+    required_error: "clientPortalDashboardShowLastVisit é obrigatório.",
+    invalid_type_error: "clientPortalDashboardShowLastVisit deve ser boolean.",
+  }).optional().default(true),
+  clientPortalDashboardShowTotalAppointments: z.boolean({
+    required_error: "clientPortalDashboardShowTotalAppointments é obrigatório.",
+    invalid_type_error: "clientPortalDashboardShowTotalAppointments deve ser boolean.",
+  }).optional().default(true),
+  clientPortalDashboardShowMonthCount: z.boolean({
+    required_error: "clientPortalDashboardShowMonthCount é obrigatório.",
+    invalid_type_error: "clientPortalDashboardShowMonthCount deve ser boolean.",
+  }).optional().default(true),
+  clientPortalDashboardShowNextAppointment: z.boolean({
+    required_error: "clientPortalDashboardShowNextAppointment é obrigatório.",
+    invalid_type_error: "clientPortalDashboardShowNextAppointment deve ser boolean.",
+  }).optional().default(true),
+  clientPortalDashboardShowRecentHistory: z.boolean({
+    required_error: "clientPortalDashboardShowRecentHistory é obrigatório.",
+    invalid_type_error: "clientPortalDashboardShowRecentHistory deve ser boolean.",
+  }).optional().default(true),
+  clientPortalDashboardHistoryLimit: z
+    .number({
+      required_error: "clientPortalDashboardHistoryLimit é obrigatório.",
+      invalid_type_error: "clientPortalDashboardHistoryLimit inválido.",
+    })
+    .int()
+    .min(1, "clientPortalDashboardHistoryLimit deve ser pelo menos 1.")
+    .max(20, "clientPortalDashboardHistoryLimit deve ser no máximo 20."),
+  clientPortalAppointmentsShowHistory: z.boolean({
+    required_error: "clientPortalAppointmentsShowHistory é obrigatório.",
+    invalid_type_error: "clientPortalAppointmentsShowHistory deve ser boolean.",
+  }).optional().default(true),
+  clientPortalAppointmentsHistoryLimit: z
+    .number({
+      required_error: "clientPortalAppointmentsHistoryLimit é obrigatório.",
+      invalid_type_error: "clientPortalAppointmentsHistoryLimit inválido.",
+    })
+    .int()
+    .min(1, "clientPortalAppointmentsHistoryLimit deve ser pelo menos 1.")
+    .max(100, "clientPortalAppointmentsHistoryLimit deve ser no máximo 100."),
+  clientPortalEmptyDashboardMessage: rejectUnsafeText("Mensagem vazia do dashboard", 240, {
+    required: true,
+  }),
+  clientPortalEmptyAppointmentsMessage: rejectUnsafeText("Mensagem vazia dos agendamentos", 240, {
+    required: true,
+  }),
+
   receiptTemplate: z.preprocess(
     (value) => {
       if (typeof value !== "string") {
@@ -134,6 +292,14 @@ export const settingsSchema = z.object({
     },
     z.enum(canonicalReceiptTemplateValues).optional().default("classic"),
   ),
+}).superRefine((value, ctx) => {
+  if (!value.clientPortalNotesEnabled && value.clientPortalNotesRequired) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["clientPortalNotesRequired"],
+      message: "Exigir observação só faz sentido quando a observação estiver habilitada.",
+    });
+  }
 });
 
 export const loginAppearanceSchema = z.object({

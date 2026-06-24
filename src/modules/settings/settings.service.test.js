@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { ValidationError } from "../../errors/ValidationError.js";
 import {
+  CLIENT_PORTAL_DEFAULTS,
   LOGIN_APPEARANCE_DEFAULTS,
   createSettingsService,
 } from "./settings.service.js";
@@ -107,6 +108,103 @@ test("getSettings usa default seguro quando receipt_template está ausente", asy
   const result = await service.getSettings();
 
   assert.equal(result.receiptTemplate, "classic");
+  assert.equal(result.clientPortalEnabled, true);
+  assert.equal(result.clientPortalSelfSignupEnabled, true);
+  assert.equal(result.clientPortalRequireAdminApproval, false);
+  assert.equal(result.clientPortalGoogleLoginEnabled, false);
+  assert.equal(result.clientPortalCancelMinHours, 0);
+  assert.equal(result.clientPortalSupportLabel, "Fale com a barbearia");
+  assert.equal(result.clientPortalBookingMinHoursAdvance, 0);
+  assert.equal(result.clientPortalBookingMaxDaysAhead, 30);
+  assert.equal(result.clientPortalMaxActiveAppointments, 1);
+  assert.equal(result.clientPortalNotesEnabled, true);
+  assert.equal(result.clientPortalNotesRequired, false);
+  assert.equal(
+    result.clientPortalBookingInstruction,
+    "Confira os dados antes de confirmar seu agendamento.",
+  );
+  assert.equal(result.clientPortalDashboardShowLastVisit, true);
+  assert.equal(result.clientPortalDashboardShowTotalAppointments, true);
+  assert.equal(result.clientPortalDashboardShowMonthCount, true);
+  assert.equal(result.clientPortalDashboardShowNextAppointment, true);
+  assert.equal(result.clientPortalDashboardShowRecentHistory, true);
+  assert.equal(result.clientPortalDashboardHistoryLimit, 5);
+  assert.equal(result.clientPortalAppointmentsShowHistory, true);
+  assert.equal(result.clientPortalAppointmentsHistoryLimit, 20);
+  assert.equal(
+    result.clientPortalEmptyDashboardMessage,
+    "Você ainda não possui histórico de agendamentos.",
+  );
+  assert.equal(
+    result.clientPortalEmptyAppointmentsMessage,
+    "Você ainda não possui agendamentos.",
+  );
+});
+
+test("getClientPortalSettings retorna defaults das novas chaves", async () => {
+  const { service } = createServiceHarness();
+
+  const result = await service.getClientPortalSettings();
+
+  assert.deepEqual(result, CLIENT_PORTAL_DEFAULTS);
+});
+
+test("getClientPortalSettings usa WhatsApp da barbearia como fallback do link de suporte", async () => {
+  const { service } = createServiceHarness({
+    getManyResult: [
+      buildSettingRow("barbershop_whatsapp", "(11) 99999-8888"),
+    ],
+  });
+
+  const result = await service.getClientPortalSettings();
+
+  assert.equal(result.supportUrl, "https://wa.me/11999998888");
+});
+
+test("getClientPortalSettings retorna regras avançadas configuradas", async () => {
+  const { service } = createServiceHarness({
+    getManyResult: [
+      buildSettingRow("client_portal_self_signup_enabled", "false"),
+      buildSettingRow("client_portal_require_admin_approval", "true"),
+      buildSettingRow("client_portal_google_login_enabled", "true"),
+      buildSettingRow("client_portal_booking_min_hours_advance", "2"),
+      buildSettingRow("client_portal_booking_max_days_ahead", "45"),
+      buildSettingRow("client_portal_max_active_appointments", "3"),
+      buildSettingRow("client_portal_notes_enabled", "false"),
+      buildSettingRow("client_portal_notes_required", "true"),
+      buildSettingRow("client_portal_booking_instruction", "Revise tudo antes de confirmar."),
+      buildSettingRow("client_portal_dashboard_show_last_visit", "false"),
+      buildSettingRow("client_portal_dashboard_history_limit", "8"),
+      buildSettingRow("client_portal_appointments_show_history", "false"),
+      buildSettingRow("client_portal_appointments_history_limit", "12"),
+      buildSettingRow(
+        "client_portal_empty_dashboard_message",
+        "Sem histórico para mostrar.",
+      ),
+      buildSettingRow(
+        "client_portal_empty_appointments_message",
+        "Sem agendamentos para mostrar.",
+      ),
+    ],
+  });
+
+  const result = await service.getClientPortalSettings();
+
+  assert.equal(result.selfSignupEnabled, false);
+  assert.equal(result.requireAdminApproval, true);
+  assert.equal(result.googleLoginEnabled, true);
+  assert.equal(result.bookingMinHoursAdvance, 2);
+  assert.equal(result.bookingMaxDaysAhead, 45);
+  assert.equal(result.maxActiveAppointments, 3);
+  assert.equal(result.notesEnabled, false);
+  assert.equal(result.notesRequired, false);
+  assert.equal(result.bookingInstruction, "Revise tudo antes de confirmar.");
+  assert.equal(result.dashboardShowLastVisit, false);
+  assert.equal(result.dashboardHistoryLimit, 8);
+  assert.equal(result.appointmentsShowHistory, false);
+  assert.equal(result.appointmentsHistoryLimit, 12);
+  assert.equal(result.emptyDashboardMessage, "Sem histórico para mostrar.");
+  assert.equal(result.emptyAppointmentsMessage, "Sem agendamentos para mostrar.");
 });
 
 test("getSettings normaliza valor legado do modelo 2", async () => {
@@ -157,12 +255,74 @@ test("updateSettings persiste receiptTemplate classic", async () => {
     appointmentIntervalMinutes: 5,
     allowClientCancel: true,
     allowClientReschedule: true,
+    clientPortalEnabled: true,
+    clientPortalSelfSignupEnabled: false,
+    clientPortalRequireAdminApproval: true,
+    clientPortalGoogleLoginEnabled: true,
+    clientPortalBookingEnabled: true,
+    clientPortalCancelEnabled: true,
+    clientPortalCancelMinHours: 2,
+    clientPortalShowPrices: true,
+    clientPortalShowDuration: true,
+    clientPortalShowProfessional: true,
+    clientPortalSupportLabel: "Fale com a equipe",
+    clientPortalSupportUrl: "https://wa.me/5511999999999",
+    clientPortalBookingSuccessMessage: "Agendamento confirmado.",
+    clientPortalNoSlotsMessage: "Sem horários disponíveis.",
+    clientPortalBookingMinHoursAdvance: 2,
+    clientPortalBookingMaxDaysAhead: 45,
+    clientPortalMaxActiveAppointments: 3,
+    clientPortalNotesEnabled: true,
+    clientPortalNotesRequired: true,
+    clientPortalBookingInstruction: "Revise tudo antes de confirmar.",
+    clientPortalDashboardShowLastVisit: true,
+    clientPortalDashboardShowTotalAppointments: true,
+    clientPortalDashboardShowMonthCount: true,
+    clientPortalDashboardShowNextAppointment: true,
+    clientPortalDashboardShowRecentHistory: true,
+    clientPortalDashboardHistoryLimit: 8,
+    clientPortalAppointmentsShowHistory: true,
+    clientPortalAppointmentsHistoryLimit: 40,
+    clientPortalEmptyDashboardMessage: "Sem histórico para mostrar.",
+    clientPortalEmptyAppointmentsMessage: "Sem agendamentos para mostrar.",
     receiptTemplate: "classic",
   });
 
   assert.equal(
+    calls.upsertMany[0].find((entry) => entry.key === "client_portal_self_signup_enabled")?.value,
+    "false",
+  );
+  assert.equal(
+    calls.upsertMany[0].find((entry) => entry.key === "client_portal_require_admin_approval")
+      ?.value,
+    "true",
+  );
+  assert.equal(
+    calls.upsertMany[0].find((entry) => entry.key === "client_portal_google_login_enabled")
+      ?.value,
+    "true",
+  );
+  assert.equal(
     calls.upsertMany[0].find((entry) => entry.key === "receipt_template")?.value,
     "classic",
+  );
+  assert.equal(
+    calls.upsertMany[0].find((entry) => entry.key === "client_portal_cancel_min_hours")?.value,
+    "2",
+  );
+  assert.equal(
+    calls.upsertMany[0].find((entry) => entry.key === "client_portal_booking_min_hours_advance")
+      ?.value,
+    "2",
+  );
+  assert.equal(
+    calls.upsertMany[0].find((entry) => entry.key === "client_portal_notes_required")?.value,
+    "true",
+  );
+  assert.equal(
+    calls.upsertMany[0].find((entry) => entry.key === "client_portal_dashboard_history_limit")
+      ?.value,
+    "8",
   );
   assert.equal(result.receiptTemplate, "classic");
 });
@@ -203,6 +363,37 @@ test("updateSettings persiste receiptTemplate clean_compact", async () => {
     appointmentIntervalMinutes: 5,
     allowClientCancel: true,
     allowClientReschedule: true,
+    clientPortalEnabled: true,
+    clientPortalSelfSignupEnabled: true,
+    clientPortalRequireAdminApproval: false,
+    clientPortalGoogleLoginEnabled: false,
+    clientPortalBookingEnabled: true,
+    clientPortalCancelEnabled: true,
+    clientPortalCancelMinHours: 0,
+    clientPortalShowPrices: true,
+    clientPortalShowDuration: true,
+    clientPortalShowProfessional: true,
+    clientPortalSupportLabel: "Fale com a barbearia",
+    clientPortalSupportUrl: "",
+    clientPortalBookingSuccessMessage: "Agendamento confirmado com sucesso.",
+    clientPortalNoSlotsMessage:
+      "Não encontramos horários para essa combinação. Tente outro profissional ou data.",
+    clientPortalBookingMinHoursAdvance: 0,
+    clientPortalBookingMaxDaysAhead: 30,
+    clientPortalMaxActiveAppointments: 1,
+    clientPortalNotesEnabled: true,
+    clientPortalNotesRequired: false,
+    clientPortalBookingInstruction: "Confira os dados antes de confirmar seu agendamento.",
+    clientPortalDashboardShowLastVisit: true,
+    clientPortalDashboardShowTotalAppointments: true,
+    clientPortalDashboardShowMonthCount: true,
+    clientPortalDashboardShowNextAppointment: true,
+    clientPortalDashboardShowRecentHistory: true,
+    clientPortalDashboardHistoryLimit: 5,
+    clientPortalAppointmentsShowHistory: true,
+    clientPortalAppointmentsHistoryLimit: 20,
+    clientPortalEmptyDashboardMessage: "Você ainda não possui histórico de agendamentos.",
+    clientPortalEmptyAppointmentsMessage: "Você ainda não possui agendamentos.",
     receiptTemplate: "clean_compact",
   });
 
@@ -229,7 +420,35 @@ test("validateSettings aceita alias legado e normaliza para modelo 2 canônico",
     appointmentIntervalMinutes: 5,
     allowClientCancel: true,
     allowClientReschedule: true,
-    receiptTemplate: "model_2",
+    clientPortalEnabled: true,
+    clientPortalBookingEnabled: true,
+    clientPortalCancelEnabled: true,
+    clientPortalCancelMinHours: 0,
+    clientPortalShowPrices: true,
+    clientPortalShowDuration: true,
+    clientPortalShowProfessional: true,
+    clientPortalSupportLabel: "Fale com a barbearia",
+    clientPortalSupportUrl: "",
+    clientPortalBookingSuccessMessage: "Agendamento confirmado com sucesso.",
+    clientPortalNoSlotsMessage:
+      "Não encontramos horários para essa combinação. Tente outro profissional ou data.",
+    clientPortalBookingMinHoursAdvance: 0,
+    clientPortalBookingMaxDaysAhead: 30,
+    clientPortalMaxActiveAppointments: 1,
+        clientPortalNotesEnabled: true,
+        clientPortalNotesRequired: false,
+        clientPortalBookingInstruction: "Confira os dados antes de confirmar seu agendamento.",
+        clientPortalDashboardShowLastVisit: true,
+        clientPortalDashboardShowTotalAppointments: true,
+        clientPortalDashboardShowMonthCount: true,
+        clientPortalDashboardShowNextAppointment: true,
+        clientPortalDashboardShowRecentHistory: true,
+        clientPortalDashboardHistoryLimit: 5,
+        clientPortalAppointmentsShowHistory: true,
+        clientPortalAppointmentsHistoryLimit: 20,
+        clientPortalEmptyDashboardMessage: "Você ainda não possui histórico de agendamentos.",
+        clientPortalEmptyAppointmentsMessage: "Você ainda não possui agendamentos.",
+        receiptTemplate: "model_2",
   });
 
   assert.equal(result.receiptTemplate, "clean_compact");
@@ -253,7 +472,87 @@ test("validateSettings rejeita receiptTemplate inválido", () => {
         appointmentIntervalMinutes: 5,
         allowClientCancel: true,
         allowClientReschedule: true,
+        clientPortalEnabled: true,
+        clientPortalBookingEnabled: true,
+        clientPortalCancelEnabled: true,
+        clientPortalCancelMinHours: 0,
+        clientPortalShowPrices: true,
+        clientPortalShowDuration: true,
+        clientPortalShowProfessional: true,
+        clientPortalSupportLabel: "Fale com a barbearia",
+        clientPortalSupportUrl: "",
+        clientPortalBookingSuccessMessage: "Agendamento confirmado com sucesso.",
+        clientPortalNoSlotsMessage:
+          "Não encontramos horários para essa combinação. Tente outro profissional ou data.",
+        clientPortalBookingMinHoursAdvance: 0,
+        clientPortalBookingMaxDaysAhead: 30,
+        clientPortalMaxActiveAppointments: 1,
+        clientPortalNotesEnabled: true,
+        clientPortalNotesRequired: false,
+        clientPortalBookingInstruction: "Confira os dados antes de confirmar seu agendamento.",
+        clientPortalDashboardShowLastVisit: true,
+        clientPortalDashboardShowTotalAppointments: true,
+        clientPortalDashboardShowMonthCount: true,
+        clientPortalDashboardShowNextAppointment: true,
+        clientPortalDashboardShowRecentHistory: true,
+        clientPortalDashboardHistoryLimit: 5,
+        clientPortalAppointmentsShowHistory: true,
+        clientPortalAppointmentsHistoryLimit: 20,
+        clientPortalEmptyDashboardMessage: "Você ainda não possui histórico de agendamentos.",
+        clientPortalEmptyAppointmentsMessage: "Você ainda não possui agendamentos.",
         receiptTemplate: "modelo_x",
+      }),
+    (error) => error instanceof ValidationError,
+  );
+});
+
+test("validateSettings rejeita exigir observação quando observação está desabilitada", () => {
+  assert.throws(
+    () =>
+      validateSettings({
+        barbershopName: "AlphaMen",
+        phone: "",
+        whatsapp: "",
+        instagram: "",
+        email: "",
+        address: {},
+        appointmentReminderEnabled: true,
+        appointmentReminderEmailEnabled: false,
+        appointmentReminderMinutes: 15,
+        defaultOpenTime: "09:00",
+        defaultCloseTime: "18:00",
+        appointmentIntervalMinutes: 5,
+        allowClientCancel: true,
+        allowClientReschedule: true,
+        clientPortalEnabled: true,
+        clientPortalBookingEnabled: true,
+        clientPortalCancelEnabled: true,
+        clientPortalCancelMinHours: 0,
+        clientPortalShowPrices: true,
+        clientPortalShowDuration: true,
+        clientPortalShowProfessional: true,
+        clientPortalSupportLabel: "Fale com a barbearia",
+        clientPortalSupportUrl: "",
+        clientPortalBookingSuccessMessage: "Agendamento confirmado com sucesso.",
+        clientPortalNoSlotsMessage:
+          "Não encontramos horários para essa combinação. Tente outro profissional ou data.",
+        clientPortalBookingMinHoursAdvance: 0,
+        clientPortalBookingMaxDaysAhead: 30,
+        clientPortalMaxActiveAppointments: 1,
+        clientPortalNotesEnabled: false,
+        clientPortalNotesRequired: true,
+        clientPortalBookingInstruction: "Confira os dados antes de confirmar seu agendamento.",
+        clientPortalDashboardShowLastVisit: true,
+        clientPortalDashboardShowTotalAppointments: true,
+        clientPortalDashboardShowMonthCount: true,
+        clientPortalDashboardShowNextAppointment: true,
+        clientPortalDashboardShowRecentHistory: true,
+        clientPortalDashboardHistoryLimit: 5,
+        clientPortalAppointmentsShowHistory: true,
+        clientPortalAppointmentsHistoryLimit: 20,
+        clientPortalEmptyDashboardMessage: "Você ainda não possui histórico de agendamentos.",
+        clientPortalEmptyAppointmentsMessage: "Você ainda não possui agendamentos.",
+        receiptTemplate: "classic",
       }),
     (error) => error instanceof ValidationError,
   );
