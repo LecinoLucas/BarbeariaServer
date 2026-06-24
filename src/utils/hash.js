@@ -7,5 +7,9 @@ export function hashPassword(password) {
 }
 
 export function comparePassword(password, hash) {
+  if (typeof hash !== "string" || hash.length === 0) {
+    return Promise.resolve(false);
+  }
+
   return bcrypt.compare(password, hash);
 }

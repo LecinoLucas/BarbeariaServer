@@ -93,7 +93,8 @@ model User {
   id           String     @id @default(cuid())
   name         String
   email        String     @unique
-  passwordHash String
+  passwordHash String?
+  googleId     String?    @unique
   role         UserRole
   status       UserStatus @default(ACTIVE)
   lastLoginAt  DateTime?
