@@ -5,9 +5,12 @@ import { authenticate } from "../../middlewares/auth.middleware.js";
 import { authorizeRoles } from "../../middlewares/role.middleware.js";
 import {
   cancelClientAppointmentHandler,
+  getClientPortalAvailabilityHandler,
   getClientDashboardHandler,
   getClientProfileHandler,
   listClientAppointmentsHandler,
+  listClientPortalProfessionalsHandler,
+  listClientPortalServicesHandler,
   listClientAttendancesHandler,
   rescheduleClientAppointmentHandler,
   updateClientProfileHandler,
@@ -18,6 +21,9 @@ const router = Router();
 router.use(authenticate, authorizeRoles(ROLES.CLIENT));
 
 router.get("/dashboard", getClientDashboardHandler);
+router.get("/services", listClientPortalServicesHandler);
+router.get("/professionals", listClientPortalProfessionalsHandler);
+router.get("/availability", getClientPortalAvailabilityHandler);
 router.get("/appointments", listClientAppointmentsHandler);
 router.get("/attendances", listClientAttendancesHandler);
 router.get("/profile", getClientProfileHandler);

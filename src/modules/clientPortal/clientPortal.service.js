@@ -19,6 +19,7 @@ import {
   getBusinessDateKeyFromUtc,
   getBusinessTimeFromUtc,
 } from "../../utils/agendaTimezone.js";
+import { getAvailability as getAppointmentAvailability } from "../appointments/appointment.service.js";
 import {
   cancelReminderForAppointment,
   recalculateReminderForAppointment,
@@ -43,6 +44,8 @@ import {
   getNextAppointment,
   getSettingByKey,
   listAppointments,
+  listActiveClientPortalProfessionals,
+  listActiveClientPortalServices,
   listAttendances,
   listRecentAttendances,
   updateAppointmentDate,
@@ -303,6 +306,14 @@ function formatAppointmentForDashboard(appointment) {
   };
 }
 
+function toPriceCents(price) {
+  if (price === null || price === undefined) {
+    return null;
+  }
+
+  return Math.round(Number(price) * 100);
+}
+
 export async function getClientDashboard(userId) {
   const client = await ensureClientProfile(userId);
   const now = new Date();
@@ -333,6 +344,53 @@ export async function getClientDashboard(userId) {
     lastVisit: lastAttendance ? formatAttendanceForDashboard(lastAttendance) : null,
     nextAppointment: nextAppointment ? formatAppointmentForDashboard(nextAppointment) : null,
     recentHistory: recentHistory.slice(0, 5).map(formatAttendanceForDashboard),
+  };
+}
+
+export async function listClientPortalServices(userId) {
+  await ensureClientProfile(userId);
+
+  const items = await listActiveClientPortalServices();
+
+  return {
+    items: items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      description: item.description ?? null,
+      durationMinutes: item.durationMinutes,
+      priceCents: toPriceCents(item.price),
+    })),
+  };
+}
+
+export async function listClientPortalProfessionals(userId) {
+  await ensureClientProfile(userId);
+
+  const items = await listActiveClientPortalProfessionals();
+
+  return {
+    items: items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      specialty: item.specialty ?? null,
+      photoUrl: null,
+    })),
+  };
+}
+
+export async function getClientPortalAvailability(query, userId) {
+  await ensureClientProfile(userId);
+
+  const result = await getAppointmentAvailability(query);
+
+  return {
+    date: result.date,
+    professionalId: result.professionalId,
+    serviceId: result.serviceId,
+    slots: result.slots.map((slot) => ({
+      time: getBusinessTimeFromUtc(new Date(slot.startAt)),
+      available: true,
+    })),
   };
 }
 

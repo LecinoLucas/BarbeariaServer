@@ -119,6 +119,25 @@ const rescheduleClientAppointmentSchema = z.object({
     .transform((value) => new Date(value)),
 });
 
+const clientPortalAvailabilityQuerySchema = z.object({
+  professionalId: z
+    .string({ required_error: "professionalId é obrigatório." })
+    .trim()
+    .min(1, "professionalId inválido."),
+  serviceId: z
+    .string({ required_error: "serviceId é obrigatório." })
+    .trim()
+    .min(1, "serviceId inválido."),
+  date: z.string({ required_error: "date é obrigatório." }).superRefine((value, ctx) => {
+    if (!isValidDateString(value)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Data inválida.",
+      });
+    }
+  }),
+});
+
 function parseOrThrow(schema, payload) {
   const result = schema.safeParse(payload);
 
@@ -143,4 +162,8 @@ export function validateUpdateClientProfile(payload) {
 
 export function validateRescheduleClientAppointment(payload) {
   return parseOrThrow(rescheduleClientAppointmentSchema, payload);
+}
+
+export function validateClientPortalAvailabilityQuery(payload) {
+  return parseOrThrow(clientPortalAvailabilityQuerySchema, payload);
 }

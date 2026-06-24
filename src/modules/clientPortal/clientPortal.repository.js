@@ -118,6 +118,20 @@ const notificationSelect = {
   updatedAt: true,
 };
 
+const clientPortalServiceSelect = {
+  id: true,
+  name: true,
+  description: true,
+  durationMinutes: true,
+  price: true,
+};
+
+const clientPortalProfessionalSelect = {
+  id: true,
+  name: true,
+  specialty: true,
+};
+
 function buildAppointmentsWhere(clientId, filters) {
   const where = {
     clientId,
@@ -357,6 +371,64 @@ export function listAttendances(clientId, filters) {
 export function countAttendances(clientId, filters) {
   return prisma.attendance.count({
     where: buildAttendancesWhere(clientId, filters),
+  });
+}
+
+export function countAllAppointments(clientId) {
+  return prisma.appointment.count({
+    where: {
+      clientId,
+      deletedAt: null,
+    },
+  });
+}
+
+export function countAllFinishedAttendances(clientId) {
+  return prisma.attendance.count({
+    where: {
+      clientId,
+      status: "FINISHED",
+    },
+  });
+}
+
+export function listRecentAttendances(clientId, limit) {
+  return prisma.attendance.findMany({
+    where: {
+      clientId,
+      status: "FINISHED",
+    },
+    orderBy: {
+      finishedAt: "desc",
+    },
+    take: limit,
+    select: attendanceSelect,
+  });
+}
+
+export function listActiveClientPortalServices() {
+  return prisma.service.findMany({
+    where: {
+      deletedAt: null,
+      status: "ACTIVE",
+    },
+    orderBy: {
+      name: "asc",
+    },
+    select: clientPortalServiceSelect,
+  });
+}
+
+export function listActiveClientPortalProfessionals() {
+  return prisma.professional.findMany({
+    where: {
+      deletedAt: null,
+      status: USER_STATUS.ACTIVE,
+    },
+    orderBy: {
+      name: "asc",
+    },
+    select: clientPortalProfessionalSelect,
   });
 }
 
