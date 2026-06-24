@@ -5,6 +5,7 @@ import paymentRoutes from "../modules/payments/payment.routes.js";
 import paymentMethodRoutes from "../modules/paymentMethods/paymentMethod.routes.js";
 import settingsRoutes from "../modules/settings/settings.routes.js";
 import authRoutes from "../modules/auth/auth.routes.js";
+import clientAuthRoutes from "../modules/clientAuth/clientAuth.routes.js";
 import appointmentReminderRoutes from "../modules/appointmentReminders/appointmentReminder.routes.js";
 import clientRoutes from "../modules/clients/client.routes.js";
 import clientPortalRoutes from "../modules/clientPortal/clientPortal.routes.js";
@@ -60,6 +61,7 @@ router.get("/ready", async (req, res) => {
 });
 
 router.use("/auth", authRoutes);
+router.use("/client-auth", clientAuthRoutes);
 router.use("/public", publicRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/users", userRoutes);
