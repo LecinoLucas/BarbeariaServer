@@ -223,6 +223,46 @@ test("getClientDashboard reflete appointmentsThisMonth no summary", async (t) =>
   assert.equal(result.summary.totalAppointments, 15);
 });
 
+test("getClientDashboard ignora agendamentos ligados a serviço ou profissional deletado no próximo horário e no total", async (t) => {
+  const origClient = prisma.client.findFirst;
+  const origApptFirst = prisma.appointment.findFirst;
+  const origAttFirst = prisma.attendance.findFirst;
+  const origAttCount = prisma.attendance.count;
+  const origApptCount = prisma.appointment.count;
+  const origAttFindMany = prisma.attendance.findMany;
+  let receivedNextWhere = null;
+  let receivedCountWhere = null;
+
+  t.after(() => {
+    prisma.client.findFirst = origClient;
+    prisma.appointment.findFirst = origApptFirst;
+    prisma.attendance.findFirst = origAttFirst;
+    prisma.attendance.count = origAttCount;
+    prisma.appointment.count = origApptCount;
+    prisma.attendance.findMany = origAttFindMany;
+  });
+
+  prisma.client.findFirst = async () => ({ id: "client-1", userId: "user-1" });
+  prisma.appointment.findFirst = async ({ where }) => {
+    receivedNextWhere = where;
+    return null;
+  };
+  prisma.attendance.findFirst = async () => null;
+  prisma.attendance.count = async () => 0;
+  prisma.appointment.count = async ({ where }) => {
+    receivedCountWhere = where;
+    return 0;
+  };
+  prisma.attendance.findMany = async () => [];
+
+  await getClientDashboard("user-1");
+
+  assert.equal(receivedNextWhere.service.deletedAt, null);
+  assert.equal(receivedNextWhere.professional.deletedAt, null);
+  assert.equal(receivedCountWhere.service.deletedAt, null);
+  assert.equal(receivedCountWhere.professional.deletedAt, null);
+});
+
 test("getClientDashboard retorna recentHistory com até 5 registros formatados", async (t) => {
   const origClient = prisma.client.findFirst;
   const origApptFirst = prisma.appointment.findFirst;

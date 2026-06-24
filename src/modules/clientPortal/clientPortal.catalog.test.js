@@ -524,6 +524,8 @@ test("listClientAppointments retorna apenas agendamentos do cliente autenticado 
   );
 
   assert.equal(receivedWhere.clientId, "client-1");
+  assert.equal(receivedWhere.service.deletedAt, null);
+  assert.equal(receivedWhere.professional.deletedAt, null);
   assert.equal(result.items[0].statusLabel, "Agendado");
   assert.equal(result.items[1].statusLabel, "Confirmado");
   assert.equal(result.items[4].statusLabel, "Não compareceu");

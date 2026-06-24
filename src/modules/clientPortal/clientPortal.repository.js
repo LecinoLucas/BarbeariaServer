@@ -165,6 +165,12 @@ function buildAppointmentsWhere(clientId, filters) {
   const where = {
     clientId,
     deletedAt: null,
+    professional: {
+      deletedAt: null,
+    },
+    service: {
+      deletedAt: null,
+    },
   };
 
   if (filters.status) {
@@ -259,6 +265,12 @@ export function getNextAppointment(clientId, now) {
     where: {
       clientId,
       deletedAt: null,
+      professional: {
+        deletedAt: null,
+      },
+      service: {
+        deletedAt: null,
+      },
       status: {
         in: ["SCHEDULED", "CONFIRMED"],
       },
@@ -408,6 +420,12 @@ export function countAllAppointments(clientId) {
     where: {
       clientId,
       deletedAt: null,
+      professional: {
+        deletedAt: null,
+      },
+      service: {
+        deletedAt: null,
+      },
     },
   });
 }
