@@ -145,6 +145,10 @@ export const monthSummaryAppointmentsQuerySchema = z.object({
   path: ["month"],
 });
 
+export const upcomingAlertsQuerySchema = z.object({
+  windowMinutes: z.coerce.number().int().min(1).max(180).default(30),
+});
+
 function parseOrThrow(schema, payload) {
   const result = schema.safeParse(payload);
   if (!result.success) throw new ValidationError(result.error);
@@ -185,4 +189,8 @@ export function validateWeekAppointmentsQuery(payload) {
 
 export function validateMonthSummaryAppointmentsQuery(payload) {
   return parseOrThrow(monthSummaryAppointmentsQuerySchema, payload);
+}
+
+export function validateUpcomingAlertsQuery(payload) {
+  return parseOrThrow(upcomingAlertsQuerySchema, payload);
 }

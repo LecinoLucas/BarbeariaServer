@@ -9,6 +9,7 @@ import {
   findActiveClientServiceAppointment,
   getSystemSettings,
   listByDay,
+  listUpcomingAlerts,
   listByWeek,
   listMonthSummaryRows,
   updateAppointmentSchedule,
@@ -294,4 +295,43 @@ test("listMonthSummaryRows filtra por status quando informado", async (t) => {
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].where.status, "SCHEDULED");
+});
+
+test("listUpcomingAlerts filtra janela, status, profissional e limite", async (t) => {
+  const originalFindMany = prisma.appointment.findMany;
+  const calls = [];
+
+  t.after(() => {
+    prisma.appointment.findMany = originalFindMany;
+  });
+
+  prisma.appointment.findMany = async (args) => {
+    calls.push(args);
+    return [];
+  };
+
+  await listUpcomingAlerts({
+    endAtLte: new Date("2026-06-23T13:30:00.000Z"),
+    limit: 10,
+    professionalId: "pro-1",
+    startAtGte: new Date("2026-06-23T12:00:00.000Z"),
+    statuses: ["SCHEDULED", "CONFIRMED"],
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].where.deletedAt, null);
+  assert.equal(calls[0].where.professionalId, "pro-1");
+  assert.equal(calls[0].where.startAt.gte.toISOString(), "2026-06-23T12:00:00.000Z");
+  assert.equal(calls[0].where.startAt.lte.toISOString(), "2026-06-23T13:30:00.000Z");
+  assert.deepEqual(calls[0].where.status.in, ["SCHEDULED", "CONFIRMED"]);
+  assert.equal(calls[0].take, 10);
+  assert.equal(calls[0].orderBy.startAt, "asc");
+  assert.deepEqual(Object.keys(calls[0].select).sort(), [
+    "client",
+    "id",
+    "professional",
+    "service",
+    "startAt",
+    "status",
+  ]);
 });

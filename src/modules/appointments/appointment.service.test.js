@@ -10,10 +10,13 @@ import {
   buildCalendarDays,
   createAppointment,
   generateSlots,
+  getUpcomingAppointmentAlerts,
   groupAppointmentsByBusinessDay,
   rescheduleAppointment,
   resolveAppointmentIntervalMinutes,
   summarizeAppointmentsByBusinessDay,
+  updateAppointment,
+  updateAppointmentStatus,
 } from "./appointment.service.js";
 
 function buildAppointment(id, startAtIso, status = "SCHEDULED") {
@@ -276,6 +279,92 @@ function buildRescheduleAppointment(overrides = {}) {
     },
     ...overrides,
   };
+}
+
+function buildEditableAppointment(overrides = {}) {
+  return {
+    id: "apt-edit-1",
+    clientId: "client-1",
+    professionalId: "pro-1",
+    serviceId: "service-1",
+    startAt: new Date("2026-06-23T12:00:00.000Z"),
+    endAt: new Date("2026-06-23T13:00:00.000Z"),
+    status: APPOINTMENT_STATUS.SCHEDULED,
+    notes: "Observacao",
+    client: { id: "client-1", name: "Cliente" },
+    professional: { id: "pro-1", name: "Profissional" },
+    service: { id: "service-1", name: "Corte", durationMinutes: 60, price: 50 },
+    ...overrides,
+  };
+}
+
+function stubUpdateAppointmentDependencies(t, options = {}) {
+  const state = {
+    appointmentFindFirstCalls: [],
+    appointmentUpdateCalls: [],
+  };
+  const currentAppointment = options.currentAppointment ?? buildEditableAppointment();
+  const updatedAppointment = options.updatedAppointment ?? {
+    ...currentAppointment,
+    ...options.updatedAppointmentOverrides,
+  };
+  const saved = {
+    appointmentFindFirst: prisma.appointment.findFirst,
+    appointmentUpdate: prisma.appointment.update,
+    clientFindFirst: prisma.client.findFirst,
+    professionalFindFirst: prisma.professional.findFirst,
+    serviceFindFirst: prisma.service.findFirst,
+    scheduleBlockFindFirst: prisma.scheduleBlock.findFirst,
+  };
+
+  t.after(() => {
+    prisma.appointment.findFirst = saved.appointmentFindFirst;
+    prisma.appointment.update = saved.appointmentUpdate;
+    prisma.client.findFirst = saved.clientFindFirst;
+    prisma.professional.findFirst = saved.professionalFindFirst;
+    prisma.service.findFirst = saved.serviceFindFirst;
+    prisma.scheduleBlock.findFirst = saved.scheduleBlockFindFirst;
+  });
+
+  prisma.appointment.findFirst = async (args) => {
+    state.appointmentFindFirstCalls.push(args);
+
+    if (typeof args.where?.id === "string") {
+      return currentAppointment;
+    }
+
+    return options.conflictingAppointment ?? null;
+  };
+  prisma.appointment.update = async (args) => {
+    state.appointmentUpdateCalls.push(args);
+    return {
+      ...updatedAppointment,
+      ...args.data,
+    };
+  };
+  prisma.client.findFirst = async () => ({
+    id: "client-1",
+    name: "Cliente",
+    status: "ACTIVE",
+    userId: "user-client-1",
+  });
+  prisma.professional.findFirst = async () => ({
+    id: "pro-1",
+    name: "Profissional",
+    status: "ACTIVE",
+    userId: "user-pro-1",
+    appointmentIntervalMinutes: 30,
+  });
+  prisma.service.findFirst = async () => ({
+    id: "service-1",
+    name: "Corte",
+    status: "ACTIVE",
+    durationMinutes: 60,
+    price: 50,
+  });
+  prisma.scheduleBlock.findFirst = async () => options.scheduleBlockConflict ?? null;
+
+  return state;
 }
 
 function createTransactionHarness(options = {}) {
@@ -635,6 +724,35 @@ test("rescheduleAppointment muda o profissional quando professionalId válido é
   assert.equal(result.professional.id, "pro-2");
 });
 
+test("rescheduleAppointment não permite reagendar no-show", async (t) => {
+  const originalTransaction = prisma.$transaction;
+  const { tx } = createTransactionHarness({
+    currentAppointment: buildRescheduleAppointment({
+      status: APPOINTMENT_STATUS.NO_SHOW,
+    }),
+  });
+
+  t.after(() => {
+    prisma.$transaction = originalTransaction;
+  });
+
+  prisma.$transaction = async (callback) => callback(tx);
+
+  await assert.rejects(
+    () =>
+      rescheduleAppointment(
+        "apt-1",
+        { date: "2026-06-23", time: "10:00" },
+        buildActor(),
+        { skipSideEffects: true },
+      ),
+    (error) => {
+      assert.equal(error.message, "Não é possível reagendar este agendamento.");
+      return true;
+    },
+  );
+});
+
 test("rescheduleAppointment não permite reagendar cancelado", async (t) => {
   const originalTransaction = prisma.$transaction;
   const { tx } = createTransactionHarness({
@@ -723,6 +841,183 @@ test("rescheduleAppointment faz retry em conflito serializável de transação",
 
   assert.equal(attempts, 2);
   assert.equal(result.startAt.toISOString(), "2026-06-23T13:00:00.000Z");
+});
+
+test("updateAppointment retorna NO_SHOW para SCHEDULED quando data/hora mudam", async (t) => {
+  const state = stubUpdateAppointmentDependencies(t, {
+    currentAppointment: buildEditableAppointment({
+      status: APPOINTMENT_STATUS.NO_SHOW,
+      startAt: new Date("2026-06-23T12:00:00.000Z"),
+    }),
+  });
+
+  const result = await updateAppointment(
+    "apt-edit-1",
+    {
+      clientId: "client-1",
+      professionalId: "pro-1",
+      serviceId: "service-1",
+      startAt: new Date("2026-06-23T13:00:00.000Z"),
+      status: APPOINTMENT_STATUS.NO_SHOW,
+      notes: "Reagendado manualmente",
+    },
+    buildActor(),
+    { skipSideEffects: true },
+  );
+
+  assert.equal(state.appointmentUpdateCalls[0].data.status, APPOINTMENT_STATUS.SCHEDULED);
+  assert.equal(result.status, APPOINTMENT_STATUS.SCHEDULED);
+});
+
+test("updateAppointment mantém NO_SHOW quando horário não muda", async (t) => {
+  const state = stubUpdateAppointmentDependencies(t, {
+    currentAppointment: buildEditableAppointment({
+      status: APPOINTMENT_STATUS.NO_SHOW,
+      startAt: new Date("2026-06-23T12:00:00.000Z"),
+    }),
+  });
+
+  const result = await updateAppointment(
+    "apt-edit-1",
+    {
+      clientId: "client-1",
+      professionalId: "pro-1",
+      serviceId: "service-1",
+      startAt: new Date("2026-06-23T12:00:00.000Z"),
+      status: APPOINTMENT_STATUS.NO_SHOW,
+      notes: "Apenas observacao",
+    },
+    buildActor(),
+    { skipSideEffects: true },
+  );
+
+  assert.equal(state.appointmentUpdateCalls[0].data.status, APPOINTMENT_STATUS.NO_SHOW);
+  assert.equal(result.status, APPOINTMENT_STATUS.NO_SHOW);
+});
+
+test("updateAppointmentStatus cancela sem remover o registro", async (t) => {
+  const state = stubUpdateAppointmentDependencies(t, {
+    currentAppointment: buildEditableAppointment({
+      status: APPOINTMENT_STATUS.SCHEDULED,
+    }),
+  });
+
+  const result = await updateAppointmentStatus(
+    "apt-edit-1",
+    { status: APPOINTMENT_STATUS.CANCELED },
+    buildActor(),
+    { skipSideEffects: true },
+  );
+
+  assert.equal(state.appointmentUpdateCalls.length, 1);
+  assert.deepEqual(state.appointmentUpdateCalls[0].data, {
+    status: APPOINTMENT_STATUS.CANCELED,
+  });
+  assert.equal("deletedAt" in state.appointmentUpdateCalls[0].data, false);
+  assert.equal(result.status, APPOINTMENT_STATUS.CANCELED);
+});
+
+test("getUpcomingAppointmentAlerts usa janela padrão de 30 minutos e calcula minutesUntil", async (t) => {
+  const originalFindMany = prisma.appointment.findMany;
+  const calls = [];
+
+  t.after(() => {
+    prisma.appointment.findMany = originalFindMany;
+  });
+
+  prisma.appointment.findMany = async (args) => {
+    calls.push(args);
+    return [
+      {
+        id: "apt-1",
+        startAt: new Date("2026-06-23T12:12:00.000Z"),
+        status: APPOINTMENT_STATUS.SCHEDULED,
+        client: { id: "client-1", name: "João" },
+        professional: { id: "pro-1", name: "Carlos" },
+        service: { id: "service-1", name: "Corte" },
+      },
+    ];
+  };
+
+  const result = await getUpcomingAppointmentAlerts(
+    { windowMinutes: 30 },
+    buildActor(),
+    { now: new Date("2026-06-23T12:00:00.000Z") },
+  );
+
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].where.status.in, [
+    APPOINTMENT_STATUS.SCHEDULED,
+    APPOINTMENT_STATUS.CONFIRMED,
+  ]);
+  assert.equal(result.meta.windowMinutes, 30);
+  assert.equal(result.items.length, 1);
+  assert.deepEqual(result.items[0], {
+    id: "apt-1",
+    date: "2026-06-23",
+    time: "09:12",
+    clientName: "João",
+    professionalName: "Carlos",
+    serviceName: "Corte",
+    status: APPOINTMENT_STATUS.SCHEDULED,
+    minutesUntil: 12,
+  });
+});
+
+test("getUpcomingAppointmentAlerts limita a busca ao fim do dia comercial", async (t) => {
+  const originalFindMany = prisma.appointment.findMany;
+  const calls = [];
+
+  t.after(() => {
+    prisma.appointment.findMany = originalFindMany;
+  });
+
+  prisma.appointment.findMany = async (args) => {
+    calls.push(args);
+    return [];
+  };
+
+  await getUpcomingAppointmentAlerts(
+    { windowMinutes: 30 },
+    buildActor(),
+    { now: new Date("2026-06-24T02:50:00.000Z") },
+  );
+
+  assert.equal(
+    calls[0].where.startAt.lte.toISOString(),
+    "2026-06-24T02:59:59.999Z",
+  );
+});
+
+test("getUpcomingAppointmentAlerts para PROFESSIONAL filtra apenas o próprio profissional", async (t) => {
+  const originalFindMany = prisma.appointment.findMany;
+  const originalProfessionalFindFirst = prisma.professional.findFirst;
+  const calls = [];
+
+  t.after(() => {
+    prisma.appointment.findMany = originalFindMany;
+    prisma.professional.findFirst = originalProfessionalFindFirst;
+  });
+
+  prisma.professional.findFirst = async () => ({
+    id: "pro-77",
+    userId: "user-pro-77",
+    name: "Carlos",
+    status: "ACTIVE",
+  });
+  prisma.appointment.findMany = async (args) => {
+    calls.push(args);
+    return [];
+  };
+
+  const result = await getUpcomingAppointmentAlerts(
+    { windowMinutes: 30 },
+    buildActor("PROFESSIONAL", "user-pro-77"),
+    { now: new Date("2026-06-23T12:00:00.000Z") },
+  );
+
+  assert.equal(calls[0].where.professionalId, "pro-77");
+  assert.deepEqual(result.items, []);
 });
 
 // ── createAppointment — duplicate detection ──────────────────────────────────

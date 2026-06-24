@@ -76,6 +76,21 @@ const appointmentRescheduleSelect = {
   },
 };
 
+const upcomingAlertSelect = {
+  id: true,
+  startAt: true,
+  status: true,
+  client: {
+    select: { id: true, name: true },
+  },
+  professional: {
+    select: { id: true, name: true },
+  },
+  service: {
+    select: { id: true, name: true },
+  },
+};
+
 const duplicateAppointmentSelect = {
   id: true,
   clientId: true,
@@ -176,6 +191,37 @@ export function listMonthSummaryRows(filters) {
       startAt: true,
       status: true,
     },
+  });
+}
+
+export function listUpcomingAlerts(
+  {
+    endAtLte,
+    limit = 10,
+    professionalId,
+    startAtGte,
+    statuses,
+  },
+  prismaOrTx = prisma,
+) {
+  const where = {
+    deletedAt: null,
+    startAt: {
+      gte: startAtGte,
+      lte: endAtLte,
+    },
+    status: { in: statuses },
+  };
+
+  if (professionalId) {
+    where.professionalId = professionalId;
+  }
+
+  return getDb(prismaOrTx).appointment.findMany({
+    where,
+    orderBy: { startAt: "asc" },
+    take: limit,
+    select: upcomingAlertSelect,
   });
 }
 

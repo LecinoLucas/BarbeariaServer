@@ -7,6 +7,7 @@ import {
   getAppointmentsMonthSummary,
   getAppointmentById,
   getAvailability,
+  getUpcomingAppointmentAlerts,
   listAppointments,
   rescheduleAppointment,
   updateAppointment,
@@ -18,6 +19,7 @@ import {
   validateDayAppointmentsQuery,
   validateListAppointmentsQuery,
   validateMonthSummaryAppointmentsQuery,
+  validateUpcomingAlertsQuery,
   validateRescheduleAppointment,
   validateUpdateAppointment,
   validateUpdateAppointmentStatus,
@@ -80,6 +82,16 @@ export async function getAvailabilityHandler(req, res, next) {
     const query = validateAvailabilityQuery(req.query);
     const result = await getAvailability(query);
     return successResponse(res, result, "Disponibilidade listada com sucesso.");
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function getUpcomingAlertsHandler(req, res, next) {
+  try {
+    const query = validateUpcomingAlertsQuery(req.query);
+    const result = await getUpcomingAppointmentAlerts(query, req.user);
+    return successResponse(res, result, "Próximos agendamentos carregados com sucesso.");
   } catch (error) {
     return next(error);
   }

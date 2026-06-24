@@ -8,6 +8,7 @@ import {
   deleteAppointmentHandler,
   getAppointmentByIdHandler,
   getAvailabilityHandler,
+  getUpcomingAlertsHandler,
   listAppointmentsByDayHandler,
   listAppointmentsByWeekHandler,
   listAppointmentsMonthSummaryHandler,
@@ -26,6 +27,11 @@ router.get("/", listAppointmentsHandler);
 router.get("/day", listAppointmentsByDayHandler);
 router.get("/week", listAppointmentsByWeekHandler);
 router.get("/month-summary", listAppointmentsMonthSummaryHandler);
+router.get(
+  "/upcoming-alerts",
+  authorizeRoles(ROLES.ADMIN, ROLES.PROFESSIONAL),
+  getUpcomingAlertsHandler,
+);
 
 // /availability deve ser registrado antes de /:id
 router.get("/availability", getAvailabilityHandler);

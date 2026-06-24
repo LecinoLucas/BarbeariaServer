@@ -37,6 +37,7 @@ import {
   getSystemSettings,
   list,
   listByDay,
+  listUpcomingAlerts,
   listByWeek,
   listMonthSummaryRows,
   listActiveRecurringBlocksForDay,
@@ -54,6 +55,8 @@ import {
   assertBusinessTime,
   combineBusinessDateAndTimeToUtc,
   getBusinessDateKeyFromUtc,
+  getBusinessDayUtcRange,
+  getBusinessTimeFromUtc,
   getWeekdayInBusinessZone,
 } from "../../utils/agendaTimezone.js";
 import {
@@ -78,7 +81,6 @@ const SLOT_BLOCKING_STATUSES = [
 ];
 const RESCHEDULABLE_STATUSES = [
   APPOINTMENT_STATUS.SCHEDULED,
-  APPOINTMENT_STATUS.CONFIRMED,
 ];
 const AGENDA_SETTINGS_KEYS = [
   "default_open_time",
@@ -86,6 +88,10 @@ const AGENDA_SETTINGS_KEYS = [
   "appointment_interval_minutes",
 ];
 const RESCHEDULE_TRANSACTION_RETRIES = 2;
+const UPCOMING_ALERT_STATUSES = [
+  APPOINTMENT_STATUS.SCHEDULED,
+  APPOINTMENT_STATUS.CONFIRMED,
+];
 
 export function buildCalendarDays(startDate, endDate) {
   const startBusinessDate = assertBusinessDate(startDate);
@@ -425,6 +431,18 @@ function ensureEditableStatus(appointment, actor) {
   }
 }
 
+function shouldResetNoShowToScheduled(current, payload) {
+  if (current.status !== APPOINTMENT_STATUS.NO_SHOW) {
+    return false;
+  }
+
+  if (!(payload.startAt instanceof Date) || Number.isNaN(payload.startAt.getTime())) {
+    return false;
+  }
+
+  return current.startAt.getTime() !== payload.startAt.getTime();
+}
+
 async function applyRoleFilters(filters, actor) {
   if (actor.role === ROLES.PROFESSIONAL) {
     const own = await findProfessionalByUserId(actor.id);
@@ -538,6 +556,50 @@ export async function getAppointmentsMonthSummary(query, actor) {
   return summarizeAppointmentsByBusinessDay(rows);
 }
 
+function calculateMinutesUntil(startAt, now) {
+  return Math.max(0, Math.ceil((startAt.getTime() - now.getTime()) / 60000));
+}
+
+export async function getUpcomingAppointmentAlerts(query, actor, options = {}) {
+  const now = options.now instanceof Date ? options.now : new Date();
+  const businessDate = getBusinessDateKeyFromUtc(now);
+  const businessDayRange = getBusinessDayUtcRange(businessDate);
+  const requestedEndAt = addMinutesUtc(now, query.windowMinutes);
+  const endAt = requestedEndAt < businessDayRange.endUtc
+    ? requestedEndAt
+    : businessDayRange.endUtc;
+
+  let professionalId;
+  if (actor.role === ROLES.PROFESSIONAL) {
+    const own = await findProfessionalByUserId(actor.id);
+    professionalId = own?.id ?? "none";
+  }
+
+  const items = await listUpcomingAlerts({
+    endAtLte: endAt,
+    limit: 10,
+    professionalId,
+    startAtGte: now,
+    statuses: UPCOMING_ALERT_STATUSES,
+  });
+
+  return {
+    items: items.map((appointment) => ({
+      id: appointment.id,
+      date: getBusinessDateKeyFromUtc(appointment.startAt),
+      time: getBusinessTimeFromUtc(appointment.startAt),
+      clientName: appointment.client?.name || "Cliente não informado",
+      professionalName: appointment.professional?.name || "Profissional não informado",
+      serviceName: appointment.service?.name || "Serviço não informado",
+      status: appointment.status,
+      minutesUntil: calculateMinutesUntil(appointment.startAt, now),
+    })),
+    meta: {
+      windowMinutes: query.windowMinutes,
+    },
+  };
+}
+
 export async function getAppointmentById(id, actor) {
   const appointment = await findById(id);
 
@@ -636,7 +698,7 @@ export async function assertAppointmentSlotAvailability({
   };
 }
 
-export async function updateAppointment(id, payload, actor) {
+export async function updateAppointment(id, payload, actor, options = {}) {
   const current = await findById(id);
 
   if (!current) throw new NotFoundError(NOT_FOUND_MESSAGE);
@@ -657,33 +719,39 @@ export async function updateAppointment(id, payload, actor) {
 
   if (conflict) throw new ConflictError(CONFLICT_MESSAGE);
 
+  const nextStatus = shouldResetNoShowToScheduled(current, payload)
+    ? APPOINTMENT_STATUS.SCHEDULED
+    : payload.status;
+
   const appointment = await update(id, {
     clientId: payload.clientId,
     professionalId: payload.professionalId,
     serviceId: payload.serviceId,
     startAt,
     endAt,
-    status: payload.status,
+    status: nextStatus,
     notes: payload.notes,
   });
 
-  if (appointment.status === APPOINTMENT_STATUS.CANCELED) {
-    await cancelReminderForAppointment(appointment.id);
-  } else {
-    await recalculateReminderForAppointment(appointment);
+  if (!options.skipSideEffects) {
+    if (appointment.status === APPOINTMENT_STATUS.CANCELED) {
+      await cancelReminderForAppointment(appointment.id);
+    } else {
+      await recalculateReminderForAppointment(appointment);
+    }
+
+    const event =
+      appointment.status === APPOINTMENT_STATUS.CANCELED
+        ? SOCKET_EVENTS.APPOINTMENT_CANCELED
+        : SOCKET_EVENTS.APPOINTMENT_UPDATED;
+
+    emitToAdmins(event, toAppointmentEventPayload(appointment));
   }
-
-  const event =
-    payload.status === APPOINTMENT_STATUS.CANCELED
-      ? SOCKET_EVENTS.APPOINTMENT_CANCELED
-      : SOCKET_EVENTS.APPOINTMENT_UPDATED;
-
-  emitToAdmins(event, toAppointmentEventPayload(appointment));
 
   return appointment;
 }
 
-export async function updateAppointmentStatus(id, payload, actor) {
+export async function updateAppointmentStatus(id, payload, actor, options = {}) {
   const current = await findById(id);
 
   if (!current) throw new NotFoundError(NOT_FOUND_MESSAGE);
@@ -693,18 +761,20 @@ export async function updateAppointmentStatus(id, payload, actor) {
 
   const appointment = await updateStatus(id, payload.status);
 
-  if (appointment.status === APPOINTMENT_STATUS.CANCELED) {
-    await cancelReminderForAppointment(appointment.id);
-  } else {
-    await recalculateReminderForAppointment(appointment);
+  if (!options.skipSideEffects) {
+    if (appointment.status === APPOINTMENT_STATUS.CANCELED) {
+      await cancelReminderForAppointment(appointment.id);
+    } else {
+      await recalculateReminderForAppointment(appointment);
+    }
+
+    const event =
+      appointment.status === APPOINTMENT_STATUS.CANCELED
+        ? SOCKET_EVENTS.APPOINTMENT_CANCELED
+        : SOCKET_EVENTS.APPOINTMENT_UPDATED;
+
+    emitToAdmins(event, toAppointmentEventPayload(appointment));
   }
-
-  const event =
-    payload.status === APPOINTMENT_STATUS.CANCELED
-      ? SOCKET_EVENTS.APPOINTMENT_CANCELED
-      : SOCKET_EVENTS.APPOINTMENT_UPDATED;
-
-  emitToAdmins(event, toAppointmentEventPayload(appointment));
 
   return appointment;
 }
