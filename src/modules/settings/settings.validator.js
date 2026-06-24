@@ -105,6 +105,8 @@ export const settingsSchema = z.object({
 
   allowClientCancel: z.boolean({ required_error: "allowClientCancel é obrigatório.", invalid_type_error: "allowClientCancel deve ser boolean." }),
   allowClientReschedule: z.boolean({ required_error: "allowClientReschedule é obrigatório.", invalid_type_error: "allowClientReschedule deve ser boolean." }),
+
+  receiptTemplate: z.enum(["classic", "clean_compact"]).optional().default("classic"),
 });
 
 export const loginAppearanceSchema = z.object({

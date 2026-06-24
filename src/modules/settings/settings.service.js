@@ -29,6 +29,7 @@ const GENERAL_KEYS = [
   "appointment_interval_minutes",
   "allow_client_cancel",
   "allow_client_reschedule",
+  "receipt_template",
 ];
 
 const GENERAL_DEFAULTS = {
@@ -51,6 +52,7 @@ const GENERAL_DEFAULTS = {
   appointment_interval_minutes: "5",
   allow_client_cancel: "true",
   allow_client_reschedule: "true",
+  receipt_template: "classic",
 };
 
 const LOGIN_APPEARANCE_KEYS = [
@@ -119,6 +121,7 @@ function shapeSettings(map) {
     appointmentIntervalMinutes: parseInt(get("appointment_interval_minutes"), 10),
     allowClientCancel: get("allow_client_cancel") === "true",
     allowClientReschedule: get("allow_client_reschedule") === "true",
+    receiptTemplate: get("receipt_template"),
   };
 }
 
@@ -146,6 +149,7 @@ function toGeneralKeyValuePairs(payload) {
     { key: "appointment_interval_minutes", value: String(payload.appointmentIntervalMinutes) },
     { key: "allow_client_cancel", value: String(payload.allowClientCancel) },
     { key: "allow_client_reschedule", value: String(payload.allowClientReschedule) },
+    { key: "receipt_template", value: payload.receiptTemplate || "classic" },
   ];
 }
 

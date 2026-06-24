@@ -197,6 +197,21 @@ test("PDF funciona sem serviço vinculado (atendimento avulso)", async () => {
   assert.ok(buffer.slice(0, 4).toString("ascii") === "%PDF", "deve ser PDF válido mesmo sem serviço");
 });
 
+test("PDF modelo clean_compact funciona corretamente", async () => {
+  const settingsClean = { ...settings, receiptTemplate: "clean_compact" };
+  const doc = renderAttendanceReceiptPdf({
+    attendance: makeAttendance({}),
+    settings: settingsClean,
+    totals: makeTotals({ grandTotalCents: 5000 }),
+  });
+  doc.end();
+  const buffer = await collectStream(doc);
+
+  assert.ok(buffer.length > 0, "PDF clean_compact não deve ser vazio");
+  assert.equal(buffer.slice(0, 4).toString("ascii"), "%PDF", "deve ser PDF válido no modelo clean_compact");
+  assert.ok(!buffer.toString("latin1").includes("costCents"), "não deve expor costCents");
+});
+
 test("PDF funciona sem pagamento registrado", async () => {
   const doc = renderAttendanceReceiptPdf({
     attendance: makeAttendance({ payment: null }),
